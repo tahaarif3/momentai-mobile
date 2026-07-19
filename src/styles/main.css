@@ -534,3 +534,23 @@ input {
   grid-row: 1 / span 2;
   align-self: center;
 }
+
+.delete-panel {
+  margin-top: 8px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.disclosures {
+  margin-top: 8px;
+  line-height: 1.5;
+}
+
+.disclosures a {
+  color: var(--text-secondary);
+}

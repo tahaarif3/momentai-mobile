@@ -196,14 +196,35 @@
               Sign in
             </button>
             <button type="button" class="btn btn-ghost btn-block" id="btnSignOut">Sign out</button>
-            <button type="button" class="btn btn-ghost btn-block danger" id="btnDeleteAccount">
-              Delete account
-            </button>
-            <p class="muted">
-              Web deletion form:
+
+            <section class="delete-panel" aria-labelledby="deleteTitle">
+              <h3 class="eyebrow" id="deleteTitle">DELETE ACCOUNT</h3>
+              <p class="muted">
+                Permanently removes your MomentAI account, history, and auth user. Re-enter your
+                password to confirm.
+              </p>
+              <label class="field-label" for="deletePassword">Password</label>
+              <input
+                id="deletePassword"
+                class="field field-input"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Confirm with password"
+              />
+              <button type="button" class="btn btn-ghost btn-block danger" id="btnDeleteAccount">
+                Delete my account
+              </button>
+            </section>
+
+            <p class="muted disclosures">
+              <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>
+              ·
+              <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
+              ·
               <a href="https://momentai.dev/delete-account.html" rel="noopener noreferrer"
-                >momentai.dev/delete-account</a
+                >Web deletion form</a
               >
+              (Play policy)
             </p>
           </div>
         </section>

@@ -391,16 +391,30 @@ function bindActions() {
       openAuthModal();
       return;
     }
-    if (!confirm('Permanently delete your MomentAI account and history?')) return;
+    const password = $('deletePassword')?.value || '';
+    if (!password) {
+      toast('Enter your password to confirm deletion');
+      return;
+    }
+    if (!confirm('Permanently delete your MomentAI account and history? This cannot be undone.')) {
+      return;
+    }
     try {
+      // Re-auth before destructive delete (store / compliance expectation)
+      const email = state.user.email;
+      if (!email) throw new Error('Account email missing — sign in again');
+      await signInWithPassword(email, password);
       await deleteAccount();
+      track('account_deleted', { ok: true });
       await signOut();
       state.user = null;
+      if ($('deletePassword')) $('deletePassword').value = '';
       renderAccount();
       refreshHistory();
       toast('Account deleted');
       showScreen('home');
     } catch (err) {
+      captureError(err);
       toast(err.message || 'Delete failed');
     }
   });
@@ -498,15 +512,28 @@ function bindActions() {
 
   $('btnPurchase')?.addEventListener('click', async () => {
     try {
-      await purchasePremium();
+      if (!Capacitor.isNativePlatform()) {
+        // Browser-only: send people to the website for Stripe
+        await Browser.open({ url: 'https://momentai.dev' });
+        return;
+      }
+      const { active } = await purchasePremium();
+      toast(active ? 'Premium unlocked' : 'Purchase finished — entitlement syncing…');
+      if (active && state.user) state.user.tier = 'premium';
+      renderAccount();
     } catch (err) {
+      captureError(err);
       toast(err.message || 'Purchase unavailable');
     }
   });
   $('btnRestore')?.addEventListener('click', async () => {
     try {
-      await restorePurchases();
+      const { active } = await restorePurchases();
+      toast(active ? 'Purchases restored' : 'No active subscription found');
+      if (active && state.user) state.user.tier = 'premium';
+      renderAccount();
     } catch (err) {
+      captureError(err);
       toast(err.message || 'Restore unavailable');
     }
   });
