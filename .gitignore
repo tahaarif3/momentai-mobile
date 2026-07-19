@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Vite / Capacitor build output
+dist/
+*.local
+.env
+.env.*
+!.env.example
+
+# Logs / OS
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Native tooling caches (keep ios/ android/ project sources)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/captures/
+ios/App/Pods/
+ios/App/build/
+ios/DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Test / coverage
+coverage/
+.maestro/tests/
+*.log

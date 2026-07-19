@@ -1,0 +1,7 @@
+# Placeholder Maestro flow — expand in Phase 7 on physical devices / CI macOS+Android.
+appId: dev.momentai.app
+---
+- launchApp
+- assertVisible: "MomentAI"
+- tapOn: "Capture a moment"
+- assertVisible: "Frame the moment."
