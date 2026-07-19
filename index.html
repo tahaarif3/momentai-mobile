@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#17110c" />
+    <title>MomentAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body data-screen="home">
+    <div class="app-shell">
+      <header class="app-header">
+        <button type="button" class="brand" data-nav="home" aria-label="MomentAI home">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">MomentAI</span>
+        </button>
+        <div class="header-actions">
+          <button type="button" class="btn btn-ghost" data-nav="paywall">Plus</button>
+          <button type="button" class="btn btn-ghost" id="btnAuth" data-action="auth">
+            Sign in
+          </button>
+        </div>
+      </header>
+
+      <main class="app-main" id="appMain">
+        <!-- HOME -->
+        <section class="screen screen--active" data-screen="home" id="screenHome">
+          <div class="screen-inner">
+            <p class="eyebrow">GOLDEN HOUR</p>
+            <h1 class="headline">Catch the light.</h1>
+            <p class="subcopy">One photo. One playlist. Yours.</p>
+            <button type="button" class="btn btn-primary btn-block" data-nav="capture">
+              Capture a moment
+            </button>
+            <p class="footnote" id="momentsCounter">Free moments · sign in to track usage</p>
+
+            <label class="field-label" for="customPrompt">Optional music prompt</label>
+            <textarea
+              id="customPrompt"
+              class="field"
+              rows="3"
+              maxlength="280"
+              placeholder="e.g. dark synthwave, soft acoustic morning…"
+            ></textarea>
+
+            <section class="moments-block" aria-labelledby="momentsTitle">
+              <div class="section-row">
+                <h2 class="eyebrow" id="momentsTitle">YOUR MOMENTS</h2>
+                <span class="mono muted" id="momentsCount">0 saved</span>
+              </div>
+              <div class="moments-grid" id="momentsGrid">
+                <p class="muted empty-state">History appears after you generate.</p>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <!-- CAPTURE -->
+        <section class="screen" data-screen="capture" id="screenCapture">
+          <div class="screen-inner">
+            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
+            <p class="eyebrow">CAPTURE</p>
+            <h2 class="headline headline--sm">Frame the moment.</h2>
+            <div class="viewfinder" id="viewfinder">
+              <img id="capturePreview" class="capture-preview hidden" alt="Selected moment" />
+              <p class="viewfinder-hint" id="viewfinderHint">Camera or photo library</p>
+            </div>
+            <div class="chip-row" role="group" aria-label="Mood presets">
+              <button type="button" class="chip" data-chip="Golden hour">golden hour</button>
+              <button type="button" class="chip" data-chip="Night drive">night drive</button>
+              <button type="button" class="chip" data-chip="Coffee run">coffee run</button>
+            </div>
+            <div class="btn-row">
+              <button type="button" class="btn btn-secondary" id="btnTakePhoto">Camera</button>
+              <button type="button" class="btn btn-secondary" id="btnPickPhoto">Library</button>
+            </div>
+            <button type="button" class="btn btn-primary btn-block" id="btnGenerate" disabled>
+              Generate my soundtrack
+            </button>
+          </div>
+        </section>
+
+        <!-- LOADING -->
+        <section class="screen" data-screen="loading" id="screenLoading">
+          <div class="loading-stage">
+            <div class="loading-aura" aria-hidden="true"></div>
+            <h2 class="headline headline--sm">Reading the moment…</h2>
+            <p class="subcopy" id="loadingSub">Curating tracks…</p>
+            <p class="mono" id="loadingPct">0%</p>
+          </div>
+        </section>
+
+        <!-- PLAYLIST -->
+        <section class="screen" data-screen="playlist" id="screenPlaylist">
+          <div class="screen-inner">
+            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
+            <p class="eyebrow">YOUR MOMENT</p>
+            <h2 class="headline headline--sm" id="playlistTitle">Your playlist</h2>
+            <p class="mono muted" id="playlistMeta">—</p>
+            <ul class="track-list" id="trackList"></ul>
+            <div class="btn-row">
+              <button type="button" class="btn btn-primary" id="btnSaveSpotify">
+                Save to Spotify
+              </button>
+              <button type="button" class="btn btn-secondary" data-nav="share">Share</button>
+            </div>
+            <button type="button" class="btn btn-ghost btn-block" id="btnSuggestMore">
+              Suggest more
+            </button>
+          </div>
+        </section>
+
+        <!-- SHARE -->
+        <section class="screen" data-screen="share" id="screenShare">
+          <div class="screen-inner">
+            <button type="button" class="btn btn-text" data-nav="playlist">‹ Back</button>
+            <p class="eyebrow">SHARE</p>
+            <h2 class="headline headline--sm">Share your moment</h2>
+            <div class="share-card" id="shareCardMount">
+              <p class="muted">Share card renders here after generation.</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-block" id="btnNativeShare">
+              Share sheet
+            </button>
+          </div>
+        </section>
+
+        <!-- PAYWALL -->
+        <section class="screen" data-screen="paywall" id="screenPaywall">
+          <div class="screen-inner">
+            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
+            <p class="eyebrow">MOMENTAI PLUS</p>
+            <h2 class="headline">Unlimited soundtracks.</h2>
+            <p class="subcopy">StoreKit / Play Billing via RevenueCat (Phase 6). No Stripe in native builds.</p>
+            <div class="plan">
+              <h3>Plus</h3>
+              <p class="plan-price">$3.99 <span>/ month</span></p>
+              <ul>
+                <li>Unlimited moments</li>
+                <li>Longer playlists</li>
+                <li>Regenerate &amp; fine-tune</li>
+              </ul>
+              <button type="button" class="btn btn-primary btn-block" id="btnPurchase">
+                Start free trial
+              </button>
+              <button type="button" class="btn btn-ghost btn-block" id="btnRestore">
+                Restore purchases
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy</a>
+        <span aria-hidden="true">·</span>
+        <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
+      </footer>
+    </div>
+
+    <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

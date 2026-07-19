@@ -1,0 +1,14 @@
+{
+  "appId": "dev.momentai.app",
+  "appName": "MomentAI",
+  "webDir": "dist/mobile",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
