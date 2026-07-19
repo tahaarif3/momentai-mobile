@@ -26,9 +26,7 @@
         </button>
         <div class="header-actions">
           <button type="button" class="btn btn-ghost" data-nav="paywall">Plus</button>
-          <button type="button" class="btn btn-ghost" id="btnAuth" data-action="auth">
-            Sign in
-          </button>
+          <button type="button" class="btn btn-ghost" id="btnAuth">Sign in</button>
         </div>
       </header>
 
@@ -59,7 +57,7 @@
                 <span class="mono muted" id="momentsCount">0 saved</span>
               </div>
               <div class="moments-grid" id="momentsGrid">
-                <p class="muted empty-state">History appears after you generate.</p>
+                <p class="muted empty-state">Sign in to see saved moments.</p>
               </div>
             </section>
           </div>
@@ -84,9 +82,19 @@
               <button type="button" class="btn btn-secondary" id="btnTakePhoto">Camera</button>
               <button type="button" class="btn btn-secondary" id="btnPickPhoto">Library</button>
             </div>
+            <label class="btn btn-ghost btn-block file-label">
+              Browse file
+              <input
+                type="file"
+                id="fileInput"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                hidden
+              />
+            </label>
             <button type="button" class="btn btn-primary btn-block" id="btnGenerate" disabled>
               Generate my soundtrack
             </button>
+            <p class="muted" id="permissionHint"></p>
           </div>
         </section>
 
@@ -96,6 +104,9 @@
             <div class="loading-aura" aria-hidden="true"></div>
             <h2 class="headline headline--sm">Reading the moment…</h2>
             <p class="subcopy" id="loadingSub">Curating tracks…</p>
+            <div class="progress-track" aria-hidden="true">
+              <div class="progress-fill" id="loaderBar"></div>
+            </div>
             <p class="mono" id="loadingPct">0%</p>
           </div>
         </section>
@@ -104,7 +115,7 @@
         <section class="screen" data-screen="playlist" id="screenPlaylist">
           <div class="screen-inner">
             <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
-            <p class="eyebrow">YOUR MOMENT</p>
+            <p class="eyebrow" id="playlistMood">YOUR MOMENT</p>
             <h2 class="headline headline--sm" id="playlistTitle">Your playlist</h2>
             <p class="mono muted" id="playlistMeta">—</p>
             <ul class="track-list" id="trackList"></ul>
@@ -112,11 +123,15 @@
               <button type="button" class="btn btn-primary" id="btnSaveSpotify">
                 Save to Spotify
               </button>
-              <button type="button" class="btn btn-secondary" data-nav="share">Share</button>
+              <button type="button" class="btn btn-secondary" id="btnShare">Share</button>
             </div>
             <button type="button" class="btn btn-ghost btn-block" id="btnSuggestMore">
               Suggest more
             </button>
+            <button type="button" class="btn btn-ghost btn-block" id="btnRegenerate">
+              Regenerate (Plus)
+            </button>
+            <audio id="previewAudio" preload="none"></audio>
           </div>
         </section>
 
@@ -141,7 +156,9 @@
             <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
             <p class="eyebrow">MOMENTAI PLUS</p>
             <h2 class="headline">Unlimited soundtracks.</h2>
-            <p class="subcopy">StoreKit / Play Billing via RevenueCat (Phase 6). No Stripe in native builds.</p>
+            <p class="subcopy" id="paywallNote">
+              StoreKit / Play Billing via RevenueCat (Phase 6). No Stripe in native builds.
+            </p>
             <div class="plan">
               <h3>Plus</h3>
               <p class="plan-price">$3.99 <span>/ month</span></p>
@@ -156,7 +173,59 @@
               <button type="button" class="btn btn-ghost btn-block" id="btnRestore">
                 Restore purchases
               </button>
+              <a
+                class="btn btn-ghost btn-block hidden"
+                id="btnWebCheckout"
+                href="https://momentai.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Web checkout (browser only)</a
+              >
             </div>
+          </div>
+        </section>
+
+        <!-- ACCOUNT -->
+        <section class="screen" data-screen="account" id="screenAccount">
+          <div class="screen-inner">
+            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
+            <p class="eyebrow">ACCOUNT</p>
+            <h2 class="headline headline--sm">Your account</h2>
+            <p class="subcopy" id="accountSummary">Not signed in</p>
+            <button type="button" class="btn btn-primary btn-block" id="btnAccountAuth">
+              Sign in
+            </button>
+            <button type="button" class="btn btn-ghost btn-block" id="btnSignOut">Sign out</button>
+
+            <section class="delete-panel" aria-labelledby="deleteTitle">
+              <h3 class="eyebrow" id="deleteTitle">DELETE ACCOUNT</h3>
+              <p class="muted">
+                Permanently removes your MomentAI account, history, and auth user. Re-enter your
+                password to confirm.
+              </p>
+              <label class="field-label" for="deletePassword">Password</label>
+              <input
+                id="deletePassword"
+                class="field field-input"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Confirm with password"
+              />
+              <button type="button" class="btn btn-ghost btn-block danger" id="btnDeleteAccount">
+                Delete my account
+              </button>
+            </section>
+
+            <p class="muted disclosures">
+              <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>
+              ·
+              <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
+              ·
+              <a href="https://momentai.dev/delete-account.html" rel="noopener noreferrer"
+                >Web deletion form</a
+              >
+              (Play policy)
+            </p>
           </div>
         </section>
       </main>
@@ -165,7 +234,32 @@
         <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy</a>
         <span aria-hidden="true">·</span>
         <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
+        <span aria-hidden="true">·</span>
+        <button type="button" class="footer-link-btn" data-nav="account">Account</button>
       </footer>
+    </div>
+
+    <!-- AUTH MODAL -->
+    <div class="modal-backdrop hidden" id="authModal" role="dialog" aria-modal="true">
+      <div class="modal-panel">
+        <button type="button" class="modal-close" id="btnAuthClose" aria-label="Close">×</button>
+        <h2 id="authTitle">Sign in</h2>
+        <p class="subcopy">Email + password via Supabase. Deep links use momentai://auth/callback.</p>
+        <label class="field-label" for="authEmail">Email</label>
+        <input id="authEmail" class="field field-input" type="email" autocomplete="email" />
+        <label class="field-label" for="authPassword">Password</label>
+        <input
+          id="authPassword"
+          class="field field-input"
+          type="password"
+          autocomplete="current-password"
+        />
+        <button type="button" class="btn btn-primary btn-block" id="btnAuthSubmit">Sign in</button>
+        <div class="btn-row">
+          <button type="button" class="btn btn-ghost" id="btnAuthToggle">Create account</button>
+          <button type="button" class="btn btn-ghost" id="btnAuthReset">Reset password</button>
+        </div>
+      </div>
     </div>
 
     <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>

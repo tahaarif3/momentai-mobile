@@ -27,7 +27,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="momentai" />
+                <data android:scheme="momentai" android:host="auth" android:pathPrefix="/callback" />
             </intent-filter>
 
             <!-- App Links on momentai.dev (assetlinks.json must be hosted — Phase 2) -->
@@ -35,7 +35,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="momentai.dev" android:pathPrefix="/auth" />
+                <data android:scheme="https" android:host="momentai.dev" android:pathPrefix="/auth/callback" />
             </intent-filter>
 
         </activity>
