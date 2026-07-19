@@ -1,13 +1,13 @@
 /**
- * HTTP client for the MomentAI web API.
- * Contract lives in the MomentAi web repo (docs/mobile-api.md).
- * Mobile shares the HTTPS API only — never source files from src/public.
+ * HTTP client for the MomentAI API (docs/mobile-api.md in MomentAi web repo).
+ * Base: VITE_API_BASE (default https://momentai.dev)
+ * Auth: Authorization Bearer <supabase_access_token>
+ * Jobs: progressToken query / X-Progress-Token or owner JWT
  */
 
 const API_BASE = (import.meta.env.VITE_API_BASE || 'https://momentai.dev').replace(/\/$/, '');
 
 let accessToken = null;
-let progressToken = null;
 
 export function getApiBase() {
   return API_BASE;
@@ -21,143 +21,128 @@ export function getAccessToken() {
   return accessToken;
 }
 
-export function setProgressToken(token) {
-  progressToken = token || null;
-}
-
-export function getProgressToken() {
-  return progressToken;
-}
-
-/**
- * @param {string} path
- * @param {RequestInit & { progressAuth?: boolean }} [options]
- */
 export async function apiFetch(path, options = {}) {
-  const { progressAuth = false, headers: initHeaders, ...rest } = options;
-  const headers = new Headers(initHeaders || {});
-
-  if (accessToken && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${accessToken}`);
-  }
-
-  if (progressAuth && progressToken && !headers.has('X-Progress-Token')) {
-    headers.set('X-Progress-Token', progressToken);
-  }
-
-  if (rest.body && !(rest.body instanceof FormData) && !headers.has('Content-Type')) {
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
+  const headers = new Headers(options.headers || {});
+  if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
+  if (!(options.body instanceof FormData) && !headers.has('Content-Type') && options.body) {
     headers.set('Content-Type', 'application/json');
   }
-
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
-  const response = await fetch(url, {
-    ...rest,
-    headers,
-  });
-
-  return response;
+  return fetch(url, { ...options, headers });
 }
 
-export async function getCompatibility() {
+export async function fetchCompatibility() {
   const res = await apiFetch('/api/mobile/compatibility');
-  if (!res.ok) {
-    return null;
-  }
+  if (!res.ok) throw new Error('Compatibility check failed');
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    return null;
+    throw new Error('Compatibility endpoint returned non-JSON (Phase 0 not deployed?)');
   }
   return res.json();
 }
 
-export async function getMe() {
-  const res = await apiFetch('/api/auth/me');
-  return res.json();
-}
-
-/**
- * Start playlist generation. Expects Phase 0 shape:
- * { success, jobId, progressToken }
- */
-export async function processPlaylist(formData) {
-  const res = await apiFetch('/api/playlist/process', {
-    method: 'POST',
-    body: formData,
-  });
+export async function processImage(file, customPrompt = '') {
+  const form = new FormData();
+  form.append('image', file, file.name || 'moment.jpg');
+  if (customPrompt.trim()) form.append('customPrompt', customPrompt.trim());
+  const res = await apiFetch('/api/playlist/process', { method: 'POST', body: form });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.message || 'Failed to start processing');
-  }
-  if (data.progressToken) {
-    setProgressToken(data.progressToken);
+    const err = new Error(data.message || 'Upload failed');
+    err.code = data.code;
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
 
-export async function getJob(jobId) {
-  const qs = progressToken ? `?progressToken=${encodeURIComponent(progressToken)}` : '';
-  const res = await apiFetch(`/api/playlist/job/${jobId}${qs}`, { progressAuth: true });
+export async function pollJob(jobId, progressToken) {
+  const q = progressToken ? `?progressToken=${encodeURIComponent(progressToken)}` : '';
+  const res = await apiFetch(`/api/playlist/job/${jobId}${q}`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.message || `Job status failed (${res.status})`);
+    const err = new Error(data.message || 'Job status failed');
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
 
-/**
- * Authenticated SSE primary path. Caller should fall back to poll on failure.
- * @param {string} jobId
- * @param {(event: MessageEvent) => void} onMessage
- * @param {(err: Error) => void} onError
- */
-export function streamJob(jobId, onMessage, onError) {
-  const tokenParam = progressToken
-    ? `?progressToken=${encodeURIComponent(progressToken)}`
-    : '';
-  const url = `${API_BASE}/api/playlist/job/${jobId}/stream${tokenParam}`;
-
-  // EventSource cannot set Authorization headers; Phase 0 progressToken covers resume.
-  // When JWT-only ownership is required, prefer fetch+ReadableStream in Phase 3.
-  const source = new EventSource(url);
-
-  source.onmessage = onMessage;
-  source.onerror = () => {
-    source.close();
-    onError(new Error('SSE connection failed'));
-  };
-
-  return () => source.close();
+export function jobStreamUrl(jobId, progressToken) {
+  const q = progressToken ? `?progressToken=${encodeURIComponent(progressToken)}` : '';
+  return `${API_BASE}/api/playlist/job/${jobId}/stream${q}`;
 }
 
-export async function savePlaylist(payload) {
+export async function fetchHistory() {
+  const res = await apiFetch('/api/playlist/history');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'History failed');
+  return data;
+}
+
+export async function fetchGeneration(id) {
+  const res = await apiFetch(`/api/playlist/generation/${id}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Load moment failed');
+  return data;
+}
+
+export async function deleteGeneration(id) {
+  const res = await apiFetch(`/api/playlist/generation/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Delete failed');
+  return data;
+}
+
+export async function savePlaylist({ playlistName, playlistDescription, trackUris, generationId }) {
   const res = await apiFetch('/api/playlist/save', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ playlistName, playlistDescription, trackUris, generationId }),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.message || 'Save failed');
-  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Save failed');
   return data;
 }
 
-export async function suggestMore(payload) {
+export async function suggestMore({ metadata, excludeTrackIds, customPrompt }) {
   const res = await apiFetch('/api/playlist/suggest-more', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ metadata, excludeTrackIds, customPrompt }),
   });
-  const data = await res.json().catch(() => ({}));
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Suggest more failed');
+  return data;
+}
+
+export async function regenerate(generationId) {
+  const res = await apiFetch('/api/playlist/regenerate', {
+    method: 'POST',
+    body: JSON.stringify({ generationId }),
+  });
+  const data = await res.json();
   if (!res.ok) {
-    throw new Error(data.message || 'Suggest more failed');
+    const err = new Error(data.message || 'Regenerate failed');
+    err.code = data.code;
+    throw err;
   }
   return data;
 }
 
 export async function deleteAccount() {
   const res = await apiFetch('/api/auth/account', { method: 'DELETE' });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(data.message || 'Account deletion failed');
-  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Account deletion failed');
   return data;
+}
+
+export async function syncAuthCallback() {
+  const res = await apiFetch('/api/auth/callback', { method: 'POST', body: '{}' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Auth sync failed');
+  return data;
+}
+
+export async function fetchMe() {
+  const res = await apiFetch('/api/auth/me');
+  return res.json();
 }

@@ -2,7 +2,21 @@
 
 Capacitor + Vite (vanilla JS) client for [MomentAI](https://momentai.dev).
 
-This repository is the **App Store / Play** shell only. The Express/Prisma API and browser UI live in the separate **MomentAi** web repo. Mobile consumes the hosted API over HTTPS — it does not copy or submodule `src/public` from the web app.
+This repository is the **App Store / Play** shell only. The Express/Prisma API and browser UI live in **[tahaarif3/MomentAi](https://github.com/tahaarif3/MomentAi)**. Mobile consumes the hosted HTTPS API — it does not copy or submodule `src/public`.
+
+## Phase 0 API (MomentAi web)
+
+Confirmed on branch `cursor/phase-0-mobile-api-f096` and partially live on production:
+
+| Capability | Status |
+| --- | --- |
+| `GET /api/mobile/compatibility` | Live on `https://momentai.dev` |
+| `progressToken` on process / SSE / poll | On Phase 0 branch — ensure merged/deployed |
+| HEIC accept + sharp→JPEG | Phase 0 branch |
+| `DELETE /api/auth/account` | Phase 0 branch |
+| `POST /api/billing/revenuecat` stub | Phase 0 branch |
+
+Contract docs (web repo): `docs/mobile-api.md`, `docs/spaces-setup.md`, `docs/mobile-migration-brief.md`.
 
 ## Stack
 
@@ -11,108 +25,106 @@ This repository is the **App Store / Play** shell only. The Express/Prisma API a
 | Build | Vite → `dist/mobile` |
 | Native | Capacitor 7 (`ios/` + `android/`) |
 | App id | `dev.momentai.app` |
-| Config | `capacitor.config.json` (`webDir: dist/mobile`) |
-| UI | Vanilla JS/CSS under `src/` |
-| Auth (Phase 2) | Supabase PKCE + Preferences storage |
-| Billing (Phase 6) | StoreKit / Play Billing (RevenueCat) — no Stripe in native builds |
+| Auth | Supabase PKCE + Capacitor Preferences |
+| Jobs | SSE + `progressToken`, poll fallback, resume |
+| Billing | StoreKit/Play (RevenueCat) later — **no Stripe in native** |
 
 ```
 src/  →  vite build  →  dist/mobile  →  npx cap sync  →  ios/ / android/
-```
-
-## Project layout
-
-```
-momentai-mobile/
-  package.json
-  vite.config.js
-  capacitor.config.json
-  index.html
-  .env.example
-  src/
-    main.js                 # app bootstrap + screen wiring
-    app/                    # router, state
-    lib/                    # api, auth, camera, share, billing, analytics
-    styles/                 # mobile CSS (Nocturne tokens)
-  dist/mobile/              # Vite output (gitignored) → cap sync
-  ios/                      # Xcode project (checked in)
-  android/                  # Android Studio project (checked in)
-  maestro/                  # native smoke flows (Phase 7)
 ```
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# Required:
-#   VITE_API_BASE=https://momentai.dev
-#   VITE_SUPABASE_URL=...
-#   VITE_SUPABASE_ANON_KEY=...
+# VITE_API_BASE=https://momentai.dev
+# Supabase keys optional if GET /api/auth/config works
+# VITE_AUTH_REDIRECT_URL=momentai://auth/callback
 
 npm install
-npm run dev          # browser preview at http://localhost:5173
-npm run build        # writes dist/mobile
-npx cap sync         # copies web assets into native projects
-npx cap open android # Android Studio
-npx cap open ios     # Xcode (macOS + CocoaPods)
+npm run dev          # http://localhost:5173
+npm run build
+npx cap sync
+npx cap open android # or ios (macOS + CocoaPods)
 ```
 
 ### Environment
 
 | Variable | Purpose |
 | --- | --- |
-| `VITE_API_BASE` | Absolute API origin (no trailing slash) |
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key (never service role) |
-| `VITE_APP_VERSION` | Compared to `/api/mobile/compatibility` |
-| `VITE_GA4_MEASUREMENT_ID` | Optional analytics (Phase 5) |
-| `VITE_SENTRY_DSN` | Optional crash reporting (Phase 5) |
+| `VITE_API_BASE` | Absolute API origin (default `https://momentai.dev`) |
+| `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` | Optional override; else `/api/auth/config` |
+| `VITE_AUTH_REDIRECT_URL` | Default `momentai://auth/callback` |
+| `VITE_APP_VERSION` | Compared to compatibility endpoint |
+| `VITE_GA4_MEASUREMENT_ID` | Optional analytics |
+| `VITE_REVENUECAT_*` | Phase 6 store billing |
 
-Never commit `.env`. Use `.env.example` as the template.
+Never commit `.env`.
+
+### Deep links (Phase 2)
+
+Allowlist in **Supabase → Authentication → URL configuration**:
+
+- `momentai://auth/callback`
+- `https://momentai.dev/auth/callback`
+
+Native wiring:
+
+- Android: `momentai://auth/callback` + App Link `https://momentai.dev/auth/callback` in `AndroidManifest.xml`
+- iOS: URL scheme `momentai` in `Info.plist`; add Associated Domains entitlement on a Mac before shipping Universal Links
+- Web repo should host `.well-known/apple-app-site-association` and `assetlinks.json` (placeholders on Phase 0 branch)
+
+Flows: sign-in / sign-up / password reset / logout / session refresh via Preferences storage. After auth, client calls `POST /api/auth/callback` to upsert the Postgres user.
+
+### Camera + jobs (Phase 3)
+
+1. Camera and photo-library permissions requested separately (denied UX + Settings hint).
+2. URI-based capture → JPEG compress ~2–4 MB (canvas; strips EXIF). HEIC falls back to server convert when needed.
+3. `POST /api/playlist/process` → persist `{ jobId, progressToken }` in Preferences.
+4. **Primary:** `EventSource(VITE_API_BASE/api/playlist/job/:id/stream?progressToken=…)`
+5. **Fallback / resume:** poll `GET .../job/:id?progressToken=…` on SSE error or app foreground.
+
+### Product surfaces (Phase 4)
+
+- History open from home grid
+- Suggest more / regenerate (Plus)
+- Save playlist (master Spotify account) → open URL with `@capacitor/browser`
+- Share card: Filesystem temp PNG → Share sheet → delete temp (needs Spaces CORS for remote photos)
 
 ## Scripts
 
 | Script | Purpose |
 | --- | --- |
 | `npm run dev` | Vite dev server |
-| `npm run build` | Production WebView assets → `dist/mobile` |
-| `npm run preview` | Preview the production build |
-| `npm run cap:sync` | `build` + `cap sync` |
-| `npm run cap:android` / `cap:ios` | Sync and open the native IDE |
+| `npm run build` | → `dist/mobile` |
+| `npm run cap:sync` | Build + `cap sync` |
 | `npm run test:unit` | Lightweight Node tests |
+
+## Manual / Maestro checks
+
+Auth (device or emulator):
+
+1. Sign up → confirm email if required → sign in
+2. Password reset email → open `momentai://` / Universal Link → session set
+3. Kill app → relaunch → session still present
+4. Sign out
+
+Camera + generate:
+
+1. Camera + library capture → generate → loading SSE → playlist
+2. Background during generation → reopen → resume/poll completes
+3. Deny camera permission → Settings message shown
+
+See `maestro/smoke.yaml` for a minimal UI smoke.
 
 ## What is gitignored
 
-Root `.gitignore` excludes:
-
-- `node_modules/`, `dist/`
-- `.env` (and other env files except `.env.example`)
-- IDE/OS junk, logs, coverage
-- Android/iOS build caches, Pods, DerivedData, keystores
-- Capacitor-synced `public/` asset folders (regenerated by `npx cap sync`)
-
-Platform-specific rules also live in `android/.gitignore` and `ios/.gitignore`.
-
-## Phases
-
-| Phase | Where | Notes |
-| --- | --- | --- |
-| 0 Backend security, Spaces, progressToken, compatibility | MomentAi (web) | Not in this repo |
-| 1 Vite + Capacitor scaffold | **This repo** | Current baseline |
-| 2 Supabase PKCE, secure storage, Universal/App Links | This repo | Stubs in `src/lib/auth.js` |
-| 3 Camera URI→Blob, compress/HEIC, SSE + resume | This repo | Basic flow in `src/main.js` |
-| 4 History, Spotify handoff, native share | This repo | Partial |
-| 5 Deletion UI, analytics, Sentry | Split with web | Stubs |
-| 6 RevenueCat / store billing | This repo | Stubs — no Stripe UI |
-| 7 Maestro / device QA / store submission | This repo | `maestro/` placeholder |
+`node_modules/`, `dist/`, `.env*`, IDE/OS junk, Android/iOS build caches, Capacitor-synced `public/` folders. See root `.gitignore` plus `android/.gitignore` / `ios/.gitignore`.
 
 ## Explicit non-goals
 
 - No monorepo / submodule of the web UI
 - No Capacitor `server.url` pointing at the live website
 - No Stripe Checkout in public native builds
-- No Spotify secrets, Prisma, BullMQ, or service-role keys here
-
-## License
-
-Private / unpublished unless noted otherwise by the MomentAI owners.
+- No per-user Spotify OAuth (master-account export only)
+- No Spotify secrets / Prisma / BullMQ in this repo

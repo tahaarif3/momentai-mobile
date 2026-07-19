@@ -1,44 +1,58 @@
-/**
- * Mobile analytics (Phase 5). Never send images, prompts, tokens, or emails.
- */
-
 import { Capacitor } from '@capacitor/core';
 
-const MEASUREMENT_ID = import.meta.env.VITE_GA4_MEASUREMENT_ID || '';
+const GA_ID = import.meta.env.VITE_GA4_MEASUREMENT_ID || '';
+
+export function platformName() {
+  if (!Capacitor.isNativePlatform()) return 'web';
+  return Capacitor.getPlatform();
+}
 
 export function getPlatform() {
-  if (!Capacitor.isNativePlatform()) return 'web';
-  return Capacitor.getPlatform(); // 'ios' | 'android'
+  return platformName();
+}
+
+export function initObservability() {
+  if (!GA_ID || typeof window === 'undefined') return;
+  window.dataLayer = window.dataLayer || [];
+  window.gtag =
+    window.gtag ||
+    function gtag() {
+      window.dataLayer.push(arguments);
+    };
+  const s = document.createElement('script');
+  s.async = true;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
+  document.head.appendChild(s);
+  window.gtag('js', new Date());
+  window.gtag('config', GA_ID, { platform: platformName(), send_page_view: true });
 }
 
 /**
- * @param {string} name
- * @param {Record<string, string | number | boolean>} [params]
+ * Never send images, prompts, tokens, or emails.
  */
 export function track(name, params = {}) {
-  const payload = {
-    ...sanitize(params),
-    platform: getPlatform(),
-  };
-
-  if (import.meta.env.DEV) {
-    console.debug('[analytics]', name, payload);
-  }
-
-  // GA4 / Sentry wiring in Phase 5 when measurement IDs are present.
-  if (!MEASUREMENT_ID || typeof window.gtag !== 'function') return;
-  window.gtag('event', name, payload);
-}
-
-function sanitize(params) {
-  const blocked = /email|token|prompt|image|password|authorization/i;
-  /** @type {Record<string, string | number | boolean>} */
-  const out = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (blocked.test(key)) continue;
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-      out[key] = value;
+  const safe = { ...params, platform: platformName() };
+  for (const key of Object.keys(safe)) {
+    const k = key.toLowerCase();
+    if (
+      k.includes('email') ||
+      k.includes('token') ||
+      k.includes('prompt') ||
+      k.includes('image') ||
+      k.includes('password')
+    ) {
+      delete safe[key];
     }
   }
-  return out;
+  if (typeof window !== 'undefined' && typeof window.gtag === 'function' && GA_ID) {
+    window.gtag('event', name, safe);
+  }
+  if (import.meta.env.DEV) {
+    console.debug('[analytics]', name, safe);
+  }
+}
+
+export function captureError(err) {
+  console.error(err);
+  track('app_error', { name: err?.name || 'Error' });
 }

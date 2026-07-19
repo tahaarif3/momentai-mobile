@@ -60,5 +60,7 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Universal Links host association is configured via associated domains entitlement on macOS/Xcode.
+	     Redirect URL for Supabase: momentai://auth/callback and https://momentai.dev/auth/callback -->
 </dict>
 </plist>
