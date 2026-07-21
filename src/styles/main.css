@@ -238,6 +238,19 @@ input {
   gap: 10px;
 }
 
+.btn-row--outputs {
+  margin-top: 4px;
+}
+
+.btn-row--single {
+  grid-template-columns: 1fr;
+}
+
+.output-hint {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
 .viewfinder {
   position: relative;
   aspect-ratio: 3 / 4;

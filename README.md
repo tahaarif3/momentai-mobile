@@ -30,6 +30,7 @@ Native Android/iOS need Android Studio or a Mac. Store IAP needs RevenueCat keys
 | 5 Deletion re-auth, GA4, Sentry, disclosures | Done |
 | 6 RevenueCat native billing (Stripe hidden) | Done (needs your store API keys) |
 | 7 Maestro + QA / store docs | Done |
+| 8 Multi-target outputs (Odesli `/p/:id` + Apple Music) | In progress — see [docs/apple-music.md](./docs/apple-music.md) |
 
 ## Setup
 
@@ -51,6 +52,7 @@ npx cap open android   # or ios on macOS
 | `VITE_SENTRY_DSN` | Optional crash reporting |
 | `VITE_REVENUECAT_IOS_API_KEY` / `ANDROID` | Store billing |
 | `VITE_REVENUECAT_ENTITLEMENT_ID` | Default `premium` |
+| `VITE_APPLE_ENABLED` | Dark-launch Apple Music save button (`true`/`false`; else uses API `features`) |
 
 ### Deep links
 
@@ -59,11 +61,18 @@ Allowlist in Supabase Auth URLs:
 - `momentai://auth/callback`
 - `https://momentai.dev/auth/callback`
 
+### Multi-target outputs
+
+- **Share / Open anywhere** → system share of `https://momentai.dev/p/<generationId>` (Odesli-backed public page on the web API). GA4: `playlist_share`.
+- **Save to Spotify** → existing master-account export. GA4: `playlist_save` `{ target: 'spotify' }`.
+- **Save to Apple Music** → feature-flagged; iOS MusicKit plugin + server `GET /api/apple/dev-token`. See [docs/apple-music.md](./docs/apple-music.md).
+
 ## Docs
 
 - [docs/testing.md](./docs/testing.md) — when/how to test
 - [docs/qa-matrix.md](./docs/qa-matrix.md) — device QA checklist
 - [docs/store-submission.md](./docs/store-submission.md) — store notes
+- [docs/apple-music.md](./docs/apple-music.md) — MusicKit wiring
 - API contract: MomentAi `docs/mobile-api.md`
 
 ## Explicit non-goals

@@ -32,6 +32,13 @@ import {
   isNativeBilling,
 } from './lib/billing.js';
 import { initObservability, track, captureError, platformName } from './lib/analytics.js';
+import {
+  setOutputFeatures,
+  isAppleMusicEnabled,
+  shareOpenAnywhere,
+  saveToAppleMusic,
+  publicPlaylistUrl,
+} from './lib/outputs.js';
 
 const state = {
   user: null,
@@ -165,6 +172,11 @@ function applyGeneration(result) {
   const tracks = result.tracks || result.playlist?.tracks || [];
   state.generation = {
     id: result.generationId || result.id || null,
+    shareUrl:
+      result.shareUrl ||
+      (result.generationId || result.id
+        ? publicPlaylistUrl(result.generationId || result.id)
+        : null),
     imagePath: result.imagePath || result.imageUrl || null,
     metadata: result.metadata || {},
     tracks,
@@ -180,7 +192,29 @@ function applyGeneration(result) {
     $('playlistMood').textContent = result.metadata?.environmentalContext || 'YOUR MOMENT';
   }
   if ($('playlistMeta')) $('playlistMeta').textContent = `${tracks.length} tracks · ready`;
+  syncOutputButtons();
   renderTracks();
+}
+
+function syncOutputButtons() {
+  const appleBtn = $('btnSaveAppleMusic');
+  const outputsRow = document.querySelector('.btn-row--outputs');
+  const hint = $('appleMusicHint');
+  const enabled = isAppleMusicEnabled();
+  if (appleBtn) {
+    appleBtn.classList.toggle('hidden', !enabled);
+  }
+  if (outputsRow) {
+    outputsRow.classList.toggle('btn-row--single', !enabled);
+  }
+  if (hint) {
+    if (enabled && Capacitor.getPlatform() === 'android') {
+      hint.hidden = false;
+      hint.textContent = 'Apple Music on Android opens catalog links for now.';
+    } else {
+      hint.hidden = true;
+    }
+  }
 }
 
 function renderTracks() {
@@ -460,9 +494,59 @@ function bindActions() {
       });
       const url = data.playlistUrl || data.url || data.external_url;
       if (url) await Browser.open({ url });
+      track('playlist_save', {
+        target: 'spotify',
+        playlist_id: state.generation.id || 'unknown',
+        track_count: uris.length,
+      });
       toast('Playlist exported');
     } catch (err) {
       toast(err.message || 'Save failed');
+    }
+  });
+
+  $('btnOpenAnywhere')?.addEventListener('click', async () => {
+    if (!state.generation?.id && !state.generation?.shareUrl) {
+      toast('Generate a playlist first');
+      return;
+    }
+    try {
+      const result = await shareOpenAnywhere({
+        generationId: state.generation.id,
+        shareUrl: state.generation.shareUrl || publicPlaylistUrl(state.generation.id),
+        title: state.generation.metadata?.emotionalVibe || 'MomentAI playlist',
+      });
+      if (result.via === 'clipboard') toast('Link copied — open anywhere');
+      else if (result.via === 'cancelled') return;
+      else if (result.via === 'browser') toast('Opened share page');
+      else toast('Share sheet ready');
+    } catch (err) {
+      captureError(err);
+      toast(err.message || 'Share failed');
+    }
+  });
+
+  $('btnSaveAppleMusic')?.addEventListener('click', async () => {
+    if (!state.generation?.tracks?.length) return;
+    if (!isAppleMusicEnabled()) {
+      toast('Apple Music save is not enabled yet');
+      return;
+    }
+    try {
+      const result = await saveToAppleMusic({
+        generationId: state.generation.id,
+        name: state.generation.metadata?.emotionalVibe || 'MomentAI Playlist',
+        description: state.generation.metadata?.environmentalContext || '',
+        tracks: state.generation.tracks,
+      });
+      if (result.mode === 'deep_link_fallback' || result.mode === 'web_preview') {
+        toast(`Opened Apple Music · ${result.matchedCount} of ${result.trackCount} matched`);
+      } else {
+        toast(`Saved ${result.matchedCount} of ${result.trackCount} tracks to Apple Music`);
+      }
+    } catch (err) {
+      captureError(err);
+      toast(err.message || 'Apple Music save failed');
     }
   });
 
@@ -555,6 +639,8 @@ async function boot() {
 
   try {
     const compat = await fetchCompatibility();
+    if (compat.features) setOutputFeatures(compat.features);
+    syncOutputButtons();
     if (compat.forceUpgrade) {
       toast(compat.forceUpgradeMessage || 'Please update MomentAI.');
     }
