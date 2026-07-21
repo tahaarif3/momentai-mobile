@@ -35,6 +35,7 @@ import {
   restorePurchases,
   shouldShowStripeCheckout,
   isNativeBilling,
+  getOfferings,
 } from './lib/billing.js';
 import { initObservability, track, captureError, platformName } from './lib/analytics.js';
 
@@ -251,13 +252,41 @@ function renderMomentsGrids(rows) {
 function renderDiscover() {
   const list = $('discoverList');
   const meta = $('discoverMeta');
-  if (!list) return;
-  // Placeholder until shared-playlist API exists
-  if (meta) meta.textContent = '0 playlists from friends';
-  list.innerHTML = '<p class="muted empty-state">No shared playlists yet.</p>';
+  if (meta) meta.textContent = 'Coming in a later update';
+  if (list) {
+    list.innerHTML =
+      '<p class="muted empty-state">Shared playlists from friends will appear here. Capture and share your own moments today.</p>';
+  }
   if ($('friendsScroll')) {
     $('friendsScroll').innerHTML =
-      '<p class="muted empty-state empty-state--inline">No shared playlists yet.</p>';
+      '<p class="muted empty-state empty-state--inline">Friend sharing comes in a later update.</p>';
+  }
+}
+
+async function openManageSubscriptions() {
+  const url = Capacitor.getPlatform() === 'android'
+    ? 'https://play.google.com/store/account/subscriptions'
+    : 'https://apps.apple.com/account/subscriptions';
+  try {
+    await Browser.open({ url });
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+async function syncPaywallPricing() {
+  try {
+    const offerings = await getOfferings();
+    const pkg = offerings?.current?.availablePackages?.[0];
+    const product = pkg?.product;
+    if (product?.priceString && $('planPrice')) {
+      const period = /year|annual/i.test(product.subscriptionPeriod || '')
+        ? '/ year'
+        : '/ month';
+      $('planPrice').innerHTML = `${product.priceString} <span>${period}</span>`;
+    }
+  } catch {
+    /* keep static fallback until RevenueCat keys are set */
   }
 }
 
@@ -508,6 +537,8 @@ function bindActions() {
     if (!state.user) openAuthModal();
     else toast('Signed in as ' + (state.user.email || 'user'));
   });
+  $('btnManageSub')?.addEventListener('click', () => openManageSubscriptions());
+  $('btnManageSubInline')?.addEventListener('click', () => openManageSubscriptions());
   $('btnAuthClose')?.addEventListener('click', closeAuthModal);
   $('btnAuthToggle')?.addEventListener('click', () => {
     state.authMode = state.authMode === 'signin' ? 'signup' : 'signin';
@@ -592,7 +623,6 @@ function bindActions() {
       toast(err.message || 'Capture failed');
     }
   });
-  $('btnFlip')?.addEventListener('click', () => toast('Camera flip coming soon'));
   $('fileInput')?.addEventListener('change', async (e) => {
     const raw = e.target.files?.[0];
     if (!raw) return;
@@ -748,6 +778,7 @@ function bindActions() {
   registerScreen('home', { onEnter: () => refreshHistory() });
   registerScreen('moments', { onEnter: () => refreshHistory() });
   registerScreen('profile', { onEnter: () => renderProfile() });
+  registerScreen('paywall', { onEnter: () => syncPaywallPricing() });
   registerScreen('capture', {
     onEnter: () => {
       if (!state.stagedFile) {

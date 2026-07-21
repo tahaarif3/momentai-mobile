@@ -61,7 +61,9 @@
 
             <h2 class="section-label section-label--dim">Friends today</h2>
             <div class="friends-scroll" id="friendsScroll">
-              <p class="muted empty-state empty-state--inline">No shared playlists yet.</p>
+              <p class="muted empty-state empty-state--inline">
+                Friend sharing comes in a later update.
+              </p>
             </div>
           </div>
         </section>
@@ -85,9 +87,12 @@
         <section class="screen screen--tab" data-screen="discover" id="screenDiscover">
           <div class="tab-scroll">
             <h1 class="page-title">Shared with you</h1>
-            <p class="page-meta mono" id="discoverMeta">0 playlists from friends</p>
+            <p class="page-meta mono" id="discoverMeta">Coming in a later update</p>
             <div class="discover-list" id="discoverList">
-              <p class="muted empty-state">No shared playlists yet.</p>
+              <p class="muted empty-state">
+                Shared playlists from friends will appear here. Capture and share your own moments
+                today.
+              </p>
             </div>
           </div>
         </section>
@@ -133,14 +138,14 @@
               </button>
               <div class="settings-row">
                 <span>Spotify</span>
-                <span class="settings-value settings-value--accent" id="settingsSpotify">Not connected</span>
+                <span class="settings-value settings-value--accent" id="settingsSpotify">Via Save</span>
                 <span class="chevron">›</span>
               </div>
-              <div class="settings-row">
+              <button type="button" class="settings-row" id="btnManageSub">
                 <span>Manage subscription</span>
                 <span class="settings-value" id="settingsTier">Free</span>
                 <span class="chevron">›</span>
-              </div>
+              </button>
               <button type="button" class="settings-row" id="btnSignOut">
                 <span>Sign out</span>
                 <span class="settings-value"></span>
@@ -204,7 +209,7 @@
                 <button type="button" class="shutter-btn" id="btnShutter" aria-label="Capture">
                   <span class="shutter-core"></span>
                 </button>
-                <button type="button" class="flip-btn" id="btnFlip" aria-label="Flip camera">
+                <button type="button" class="flip-btn hidden" id="btnFlip" aria-label="Flip camera" aria-hidden="true">
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M7 7h10l-2-2M17 17H7l2 2"></path>
                     <path d="M20 12a8 8 0 0 0-8-8"></path>
@@ -212,6 +217,7 @@
                   </svg>
                   <span class="mono">flip</span>
                 </button>
+                <div class="flip-spacer" aria-hidden="true"></div>
               </div>
             </div>
             <input
@@ -329,7 +335,7 @@
             <div class="plan plan--plus">
               <span class="plan-badge">7 DAYS FREE</span>
               <h3>MomentAI Plus</h3>
-              <p class="plan-price">$4 <span>/ mo</span></p>
+              <p class="plan-price" id="planPrice">$4.00 <span>/ month</span></p>
               <ul>
                 <li>Unlimited moments</li>
                 <li>24+ track playlists</li>
@@ -361,9 +367,25 @@
                 <li>Watermarked cards</li>
               </ul>
             </div>
-            <p class="mono footnote-center">
-              cancel anytime · students $2/mo · your playlists stay yours
+
+            <p class="subscription-legal" id="subscriptionLegal">
+              MomentAI Plus is an auto-renewable subscription. Payment is charged to your Apple ID
+              account at confirmation of purchase. The subscription renews monthly unless canceled
+              at least 24 hours before the end of the current period. After a free trial, you will
+              be charged the subscription price unless you cancel. Manage or cancel in
+              <button type="button" class="accent-link" id="btnManageSubInline">Settings → Subscriptions</button>.
+              Price shown in the Apple purchase sheet is authoritative if it differs from this screen.
             </p>
+            <p class="paywall-legal-links">
+              <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>
+              ·
+              <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms of Use</a>
+              ·
+              <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" rel="noopener noreferrer"
+                >Apple EULA</a
+              >
+            </p>
+            <p class="mono footnote-center">cancel anytime · your playlists stay yours</p>
           </div>
         </section>
       </main>
@@ -426,6 +448,12 @@
           autocomplete="current-password"
         />
         <button type="button" class="btn btn-primary btn-block" id="btnAuthSubmit">Sign in</button>
+        <p class="auth-legal muted">
+          By continuing you agree to our
+          <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
+          and
+          <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>.
+        </p>
         <div class="btn-row">
           <button type="button" class="btn btn-ghost" id="btnAuthToggle">Create account</button>
           <button type="button" class="btn btn-ghost" id="btnAuthReset">Reset password</button>
