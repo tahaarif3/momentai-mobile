@@ -39,6 +39,12 @@ import {
   saveToAppleMusic,
   publicPlaylistUrl,
 } from './lib/outputs.js';
+import {
+  hasCompletedOnboarding,
+  bindOnboarding,
+  startOnboarding,
+  renderOnboarding,
+} from './lib/onboarding.js';
 
 const state = {
   user: null,
@@ -627,15 +633,66 @@ function bindActions() {
   }
 
   registerScreen('home', { onShow: () => refreshHistory() });
+  registerScreen('onboarding', {
+    onShow: () => {
+      const name =
+        state.user?.displayName?.split?.(' ')?.[0] ||
+        state.user?.email?.split?.('@')?.[0] ||
+        'friend';
+      renderOnboarding({ userName: name });
+    },
+  });
+
+  bindOnboarding({
+    getUserName: () =>
+      state.user?.displayName?.split?.(' ')?.[0] ||
+      state.user?.email?.split?.('@')?.[0] ||
+      'friend',
+    onFinish: () => {
+      showScreen('capture');
+      toast('Point at anything worth remembering');
+    },
+    onSignIn: () => {
+      openAuthModal();
+    },
+    onAuthEmail: (email) => {
+      if (email && $('authEmail')) $('authEmail').value = email;
+      state.authMode = 'signup';
+      syncAuthUi();
+      openAuthModal();
+    },
+    onPurchase: async (plan) => {
+      if (!Capacitor.isNativePlatform()) {
+        toast('Plus unlocks in the App Store / Play build');
+        return;
+      }
+      try {
+        const { active } = await purchasePremium();
+        if (active && state.user) state.user.tier = 'premium';
+        renderAccount();
+        toast(active ? 'Plus unlocked' : 'Purchase finished');
+      } catch (err) {
+        // Don't block onboarding — user can use Maybe later
+        console.warn('[onboarding] purchase', err.message);
+        toast(err.message || 'Purchase unavailable — continue free');
+        throw err;
+      }
+    },
+  });
 }
 
 async function boot() {
   initObservability();
   track('app_open');
-  initRouter('home');
   bindNavigation();
   bindActions();
   syncAuthUi();
+
+  const onboarded = await hasCompletedOnboarding();
+  initRouter(onboarded ? 'home' : 'onboarding');
+  if (!onboarded) {
+    startOnboarding('friend');
+  }
 
   try {
     const compat = await fetchCompatibility();
@@ -663,6 +720,12 @@ async function boot() {
       renderAccount();
       refreshHistory();
       if (user?.id) await initBilling(user.id);
+      // Refresh done-screen name if still onboarding
+      if (!onboarded) {
+        const name =
+          user?.displayName?.split?.(' ')?.[0] || user?.email?.split?.('@')?.[0] || 'friend';
+        renderOnboarding({ userName: name });
+      }
     },
   });
 
@@ -676,18 +739,21 @@ async function boot() {
       : 'Browser preview — native builds use App Store / Play (RevenueCat).';
   }
 
-  await resumeActiveJob({
-    onComplete: (result) => {
-      applyGeneration(result);
-      showScreen('playlist');
-      toast('Resumed completed generation');
-    },
-    onProgress: (p) => {
-      showScreen('loading');
-      if (p?.message) setLoader(40, p.message);
-    },
-    onError: (err) => console.warn('resume job', err.message),
-  });
+  // Don't resume jobs over a first-run onboarding session
+  if (onboarded) {
+    await resumeActiveJob({
+      onComplete: (result) => {
+        applyGeneration(result);
+        showScreen('playlist');
+        toast('Resumed completed generation');
+      },
+      onProgress: (p) => {
+        showScreen('loading');
+        if (p?.message) setLoader(40, p.message);
+      },
+      onError: (err) => console.warn('resume job', err.message),
+    });
+  }
 
   App.addListener('appStateChange', ({ isActive }) => {
     if (!isActive) return;
