@@ -31,6 +31,334 @@
       </header>
 
       <main class="app-main" id="appMain">
+        <!-- ONBOARDING (first-run) -->
+        <section class="screen" data-screen="onboarding" id="screenOnboarding">
+          <div class="onboard-shell">
+            <div class="onboard-progress" id="onboardProgress" hidden>
+              <button type="button" class="onboard-back" id="onboardBack" aria-label="Back">‹</button>
+              <div class="onboard-progress-track" aria-hidden="true">
+                <div class="onboard-progress-fill" id="onboardProgressFill"></div>
+              </div>
+              <button type="button" class="onboard-skip" id="onboardSkip">Skip</button>
+            </div>
+
+            <div class="onboard-body">
+              <!-- 0 Welcome -->
+              <div class="onboard-step onboard-welcome" data-onboard-step="welcome">
+                <div class="onboard-blob onboard-blob--amber" aria-hidden="true"></div>
+                <div class="onboard-blob onboard-blob--slate" aria-hidden="true"></div>
+                <div class="onboard-welcome-brand">
+                  <span class="brand-mark brand-mark--round" aria-hidden="true"></span>
+                  <span class="brand-name">MomentAI</span>
+                </div>
+                <div class="onboard-welcome-copy">
+                  <p class="onboard-eyebrow">a soundtrack for right now</p>
+                  <h1 class="onboard-hero">Turn any photo into a playlist.</h1>
+                  <p class="onboard-sub">
+                    Snap the moment you're in — golden light, a rainy window, a late drive — and we
+                    score it with music that matches the mood.
+                  </p>
+                </div>
+                <div class="onboard-welcome-actions">
+                  <button type="button" class="btn btn-primary btn-block" id="btnOnboardStart">
+                    Get started
+                  </button>
+                  <p class="onboard-foot-link">
+                    already have an account?
+                    <button type="button" class="link-amber" id="btnOnboardSignIn">sign in</button>
+                  </p>
+                </div>
+              </div>
+
+              <!-- 1 Genres -->
+              <div class="onboard-step" data-onboard-step="genres" hidden>
+                <h2 class="onboard-title">What do you<br />listen to?</h2>
+                <p class="onboard-sub">
+                  Pick a few. We'll tune every playlist to your taste — you can change these later.
+                </p>
+                <div class="genre-grid" id="genreGrid" role="group" aria-label="Music genres">
+                  <button type="button" class="genre-card" data-genre="indie" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🎸</span>
+                    <span class="genre-label">Indie</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="lofi" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🌙</span>
+                    <span class="genre-label">Lo-fi</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="rnb" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">💜</span>
+                    <span class="genre-label">R&amp;B</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="electronic" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">⚡</span>
+                    <span class="genre-label">Electronic</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="hiphop" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🎤</span>
+                    <span class="genre-label">Hip-hop</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="jazz" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🎷</span>
+                    <span class="genre-label">Jazz</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="ambient" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🌫️</span>
+                    <span class="genre-label">Ambient</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="pop" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">✨</span>
+                    <span class="genre-label">Pop</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="classical" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🎻</span>
+                    <span class="genre-label">Classical</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                  <button type="button" class="genre-card" data-genre="rock" aria-pressed="false">
+                    <span class="genre-emoji" aria-hidden="true">🔥</span>
+                    <span class="genre-label">Rock</span>
+                    <span class="genre-check" aria-hidden="true"></span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 2 Social proof -->
+              <div class="onboard-step onboard-social" data-onboard-step="social" hidden>
+                <div class="onboard-blob onboard-blob--center" aria-hidden="true"></div>
+                <p class="onboard-stat">2.4M+</p>
+                <p class="onboard-stat-label">playlists scored from real moments</p>
+                <p class="onboard-social-line">
+                  You're in good company — and yours is<br />seconds away.
+                </p>
+                <blockquote class="onboard-quote">
+                  <div class="onboard-stars" aria-label="5 stars">★★★★★</div>
+                  <p>
+                    “I took one photo of my coffee at sunrise and it built the exact playlist my
+                    morning needed. It's a little uncanny.”
+                  </p>
+                  <footer>
+                    <span class="onboard-avatar" aria-hidden="true">J</span>
+                    <span>
+                      <strong>Jordan M.</strong>
+                      <span class="mono muted">app store · 4.8★ · 12k ratings</span>
+                    </span>
+                  </footer>
+                </blockquote>
+              </div>
+
+              <!-- 3 Auth -->
+              <div class="onboard-step" data-onboard-step="auth" hidden>
+                <h2 class="onboard-title">Save your<br />taste profile.</h2>
+                <p class="onboard-sub">
+                  Create an account so your moments and playlists sync everywhere.
+                </p>
+                <div class="onboard-auth-stack">
+                  <button type="button" class="btn btn-apple btn-block" id="btnOnboardApple">
+                    <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        fill="currentColor"
+                        d="M16.4 12.8c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8s-1.8-.8-3-.8c-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7 2-1.1 2.8-2.2c.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.4-1-2.4-3.6zm-2.3-6.6c.6-.8 1.1-1.9.9-3-1 0-2.1.6-2.8 1.4-.6.7-1.1 1.8-1 2.9 1.1.1 2.2-.6 2.9-1.3z"
+                      ></path>
+                    </svg>
+                    Continue with Apple
+                  </button>
+                  <button type="button" class="btn btn-google btn-block" id="btnOnboardGoogle">
+                    Continue with Google
+                  </button>
+                </div>
+                <div class="onboard-or"><span>or</span></div>
+                <label class="onboard-email-field" for="onboardEmail">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                    <path d="m3 7 9 6 9-6"></path>
+                  </svg>
+                  <input
+                    id="onboardEmail"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="you@email.com"
+                  />
+                </label>
+                <div class="onboard-spacer"></div>
+                <button type="button" class="btn btn-primary btn-block" id="btnOnboardEmail">
+                  Continue with email
+                </button>
+                <button type="button" class="btn-text-mono" id="btnOnboardAuthSkip">
+                  Continue without an account
+                </button>
+                <p class="onboard-legal">
+                  by continuing you agree to our
+                  <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">terms</a>
+                  &amp;
+                  <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer"
+                    >privacy policy</a
+                  >
+                </p>
+              </div>
+
+              <!-- 4 Camera -->
+              <div class="onboard-step onboard-primer" data-onboard-step="camera" hidden>
+                <div class="onboard-icon-tile" aria-hidden="true">
+                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"></path>
+                    <circle cx="12" cy="13" r="3.4"></circle>
+                  </svg>
+                </div>
+                <h2 class="onboard-title onboard-title--center">Let's open the camera.</h2>
+                <p class="onboard-sub onboard-sub--center">
+                  MomentAI works best live — one shot of what's in front of you, no retakes. We only
+                  use the camera when you tap capture.
+                </p>
+                <div class="onboard-primer-actions">
+                  <button type="button" class="btn btn-primary btn-block" id="btnOnboardCameraAllow">
+                    Allow camera access
+                  </button>
+                  <button type="button" class="btn-text-mono" id="btnOnboardCameraSkip">
+                    I'll use my camera roll instead
+                  </button>
+                </div>
+              </div>
+
+              <!-- 5 Notifications -->
+              <div class="onboard-step onboard-primer" data-onboard-step="notif" hidden>
+                <div class="onboard-icon-tile" aria-hidden="true">
+                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"></path>
+                    <path d="M10 19a2 2 0 0 0 4 0"></path>
+                  </svg>
+                </div>
+                <h2 class="onboard-title onboard-title--center">One nudge at golden hour.</h2>
+                <p class="onboard-sub onboard-sub--center">
+                  We'll send a single daily reminder when the light's best where you are. No spam,
+                  ever.
+                </p>
+                <div class="onboard-push-preview" aria-hidden="true">
+                  <div class="onboard-push-icon"></div>
+                  <div class="onboard-push-body">
+                    <strong>MomentAI</strong>
+                    <span>🌅 Golden hour starts in 15 min — catch it.</span>
+                  </div>
+                  <span class="mono muted">now</span>
+                </div>
+                <div class="onboard-primer-actions">
+                  <button type="button" class="btn btn-primary btn-block" id="btnOnboardNotifAllow">
+                    Turn on reminders
+                  </button>
+                  <button type="button" class="btn-text-mono" id="btnOnboardNotifSkip">Not now</button>
+                </div>
+              </div>
+
+              <!-- 6 Paywall -->
+              <div class="onboard-step" data-onboard-step="paywall" hidden>
+                <div class="onboard-paywall-head">
+                  <h2 class="onboard-title onboard-title--center">Unlimited soundtracks.</h2>
+                  <p class="onboard-sub onboard-sub--center">
+                    Full-length playlists, unlimited saves, no daily cap.
+                  </p>
+                </div>
+                <div class="plan-picker" role="radiogroup" aria-label="Subscription plan">
+                  <button
+                    type="button"
+                    class="plan-row"
+                    data-plan="weekly"
+                    role="radio"
+                    aria-checked="false"
+                  >
+                    <span class="plan-dot" aria-hidden="true"></span>
+                    <span class="plan-mid">
+                      <span class="plan-name">Weekly</span>
+                      <span class="plan-daily">just $0.28/day</span>
+                      <span class="plan-sub">try it out, cancel anytime</span>
+                    </span>
+                    <span class="plan-price-col">
+                      <span class="plan-price">$1.99</span>
+                      <span class="plan-unit">per week</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    class="plan-row is-selected"
+                    data-plan="annual"
+                    role="radio"
+                    aria-checked="true"
+                  >
+                    <span class="plan-dot" aria-hidden="true"></span>
+                    <span class="plan-mid">
+                      <span class="plan-name-row">
+                        <span class="plan-name">Annual</span>
+                        <span class="plan-badge">SAVE 60%</span>
+                      </span>
+                      <span class="plan-daily">just $0.11/day</span>
+                      <span class="plan-sub">billed $39.99/yr · 7 days free</span>
+                    </span>
+                    <span class="plan-price-col">
+                      <span class="plan-price">$3.33</span>
+                      <span class="plan-unit">per month</span>
+                    </span>
+                  </button>
+                </div>
+                <div class="plus-card">
+                  <p class="plus-card-title">Everything in Plus</p>
+                  <ul>
+                    <li>unlimited moments — no daily cap</li>
+                    <li>full-length playlists (24+ tracks)</li>
+                    <li>unlimited saves to Spotify</li>
+                    <li>regenerate &amp; fine-tune the vibe</li>
+                    <li>premium share cards, no watermark</li>
+                  </ul>
+                </div>
+                <div class="free-card">
+                  <div class="free-card-row">
+                    <strong>Continue on Free</strong>
+                    <span class="mono muted">$0 forever</span>
+                  </div>
+                  <p class="mono muted">
+                    3 moments/day · shorter playlists (15 tracks) · 5 saves per month
+                  </p>
+                </div>
+              </div>
+
+              <!-- 7 Done -->
+              <div class="onboard-step onboard-done" data-onboard-step="done" hidden>
+                <div class="onboard-blob onboard-blob--center" aria-hidden="true"></div>
+                <div class="onboard-check" aria-hidden="true">
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <path d="M5 12.5 10 17.5 19 6.5"></path>
+                  </svg>
+                </div>
+                <h2 class="onboard-title onboard-title--center">
+                  You're all set, <span id="onboardDoneName">friend</span>.
+                </h2>
+                <p class="onboard-sub onboard-sub--center">
+                  Point your camera at anything worth remembering. The soundtrack's on us.
+                </p>
+                <div class="onboard-done-actions">
+                  <button type="button" class="btn btn-primary btn-block" id="btnOnboardFinish">
+                    Capture my first moment
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="onboard-sticky" id="onboardSticky" hidden>
+              <button type="button" class="btn btn-primary btn-block" id="onboardStickyCta">
+                Continue
+              </button>
+              <button type="button" class="onboard-maybe-later" id="onboardMaybeLater" hidden>
+                Maybe later — continue on Free
+              </button>
+            </div>
+          </div>
+        </section>
+
         <!-- HOME -->
         <section class="screen screen--active" data-screen="home" id="screenHome">
           <div class="screen-inner">

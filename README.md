@@ -31,6 +31,7 @@ Native Android/iOS need Android Studio or a Mac. Store IAP needs RevenueCat keys
 | 6 RevenueCat native billing (Stripe hidden) | Done (needs your store API keys) |
 | 7 Maestro + QA / store docs | Done |
 | 8 Multi-target outputs (Odesli `/p/:id` + Apple Music) | In progress — see [docs/apple-music.md](./docs/apple-music.md) |
+| 9 First-run onboarding (8-step) | Done — welcome → taste → auth → permissions → paywall → capture |
 
 ## Setup
 
