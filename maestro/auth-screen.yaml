@@ -2,6 +2,7 @@ appId: dev.momentai.app
 ---
 - launchApp
 - assertVisible: "MomentAI"
+- tapOn: "You"
 - tapOn: "Sign in"
 - assertVisible: "Email"
 - assertVisible: "Password"

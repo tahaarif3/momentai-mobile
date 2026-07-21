@@ -1,6 +1,6 @@
 {
   "name": "momentai-mobile",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "MomentAI Capacitor + Vite mobile client (iOS / Android)",
   "type": "module",

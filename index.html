@@ -19,195 +19,142 @@
   </head>
   <body data-screen="home">
     <div class="app-shell">
-      <header class="app-header">
-        <button type="button" class="brand" data-nav="home" aria-label="MomentAI home">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span class="brand-name">MomentAI</span>
-        </button>
-        <div class="header-actions">
-          <button type="button" class="btn btn-ghost" data-nav="paywall">Plus</button>
-          <button type="button" class="btn btn-ghost" id="btnAuth">Sign in</button>
-        </div>
-      </header>
-
       <main class="app-main" id="appMain">
-        <!-- HOME -->
-        <section class="screen screen--active" data-screen="home" id="screenHome">
-          <div class="screen-inner">
-            <p class="eyebrow">GOLDEN HOUR</p>
-            <h1 class="headline">Catch the light.</h1>
-            <p class="subcopy">One photo. One playlist. Yours.</p>
-            <button type="button" class="btn btn-primary btn-block" data-nav="capture">
-              Capture a moment
-            </button>
-            <p class="footnote" id="momentsCounter">Free moments · sign in to track usage</p>
-
-            <label class="field-label" for="customPrompt">Optional music prompt</label>
-            <textarea
-              id="customPrompt"
-              class="field"
-              rows="3"
-              maxlength="280"
-              placeholder="e.g. dark synthwave, soft acoustic morning…"
-            ></textarea>
-
-            <section class="moments-block" aria-labelledby="momentsTitle">
-              <div class="section-row">
-                <h2 class="eyebrow" id="momentsTitle">YOUR MOMENTS</h2>
-                <span class="mono muted" id="momentsCount">0 saved</span>
+        <!-- NOW (home tab) -->
+        <section class="screen screen--active screen--tab" data-screen="home" id="screenHome">
+          <div class="tab-scroll">
+            <header class="home-header">
+              <div class="brand-inline">
+                <span class="brand-dot" aria-hidden="true"></span>
+                <span class="brand-name">MomentAI</span>
               </div>
-              <div class="moments-grid" id="momentsGrid">
-                <p class="muted empty-state">Sign in to see saved moments.</p>
+              <span class="streak-chip" id="streakChip">🔥 — day streak</span>
+            </header>
+
+            <article class="hero-card">
+              <div class="hero-preview" id="heroPreview">
+                <p class="placeholder-label">live camera preview</p>
               </div>
-            </section>
+              <div class="hero-panel">
+                <p class="live-eyebrow">
+                  <span class="live-dot" aria-hidden="true"></span>
+                  <span id="goldenHourLabel">GOLDEN HOUR · — LEFT</span>
+                </p>
+                <h1 class="hero-headline" id="heroHeadline">Catch the light.</h1>
+                <p class="hero-sub">One photo. One playlist. Yours.</p>
+                <button type="button" class="btn btn-primary btn-block" data-nav="capture">
+                  Capture this moment
+                </button>
+                <p class="hero-footnote" id="momentsCounter">
+                  Free moments · sign in to track usage
+                </p>
+              </div>
+            </article>
+
+            <div class="section-row">
+              <h2 class="section-label">Latest moments</h2>
+              <button type="button" class="link-muted" data-nav="moments">see all ›</button>
+            </div>
+            <div class="grid-2" id="homeMomentsGrid">
+              <p class="muted empty-state">Sign in to see saved moments.</p>
+            </div>
+
+            <h2 class="section-label section-label--dim">Friends today</h2>
+            <div class="friends-scroll" id="friendsScroll">
+              <p class="muted empty-state empty-state--inline">
+                Friend sharing comes in a later update.
+              </p>
+            </div>
           </div>
         </section>
 
-        <!-- CAPTURE -->
-        <section class="screen" data-screen="capture" id="screenCapture">
-          <div class="screen-inner">
-            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
-            <p class="eyebrow">CAPTURE</p>
-            <h2 class="headline headline--sm">Frame the moment.</h2>
-            <div class="viewfinder" id="viewfinder">
-              <img id="capturePreview" class="capture-preview hidden" alt="Selected moment" />
-              <p class="viewfinder-hint" id="viewfinderHint">Camera or photo library</p>
+        <!-- MOMENTS tab -->
+        <section class="screen screen--tab" data-screen="moments" id="screenMoments">
+          <div class="tab-scroll">
+            <h1 class="page-title">Your moments</h1>
+            <p class="page-meta mono" id="momentsPageMeta">0 moments · 0 tracks</p>
+            <div class="filter-chips" role="group" aria-label="Filter moments">
+              <button type="button" class="chip chip--active" data-filter="all">All</button>
+              <button type="button" class="chip" data-filter="month">This month</button>
+              <button type="button" class="chip" data-filter="golden">Golden hour</button>
+              <button type="button" class="chip" data-filter="night">Night</button>
             </div>
-            <div class="chip-row" role="group" aria-label="Mood presets">
-              <button type="button" class="chip" data-chip="Golden hour">golden hour</button>
-              <button type="button" class="chip" data-chip="Night drive">night drive</button>
-              <button type="button" class="chip" data-chip="Coffee run">coffee run</button>
+            <div class="grid-2" id="momentsGrid"></div>
+          </div>
+        </section>
+
+        <!-- DISCOVER tab -->
+        <section class="screen screen--tab" data-screen="discover" id="screenDiscover">
+          <div class="tab-scroll">
+            <h1 class="page-title">Shared with you</h1>
+            <p class="page-meta mono" id="discoverMeta">Coming in a later update</p>
+            <div class="discover-list" id="discoverList">
+              <p class="muted empty-state">
+                Shared playlists from friends will appear here. Capture and share your own moments
+                today.
+              </p>
             </div>
-            <div class="btn-row">
-              <button type="button" class="btn btn-secondary" id="btnTakePhoto">Camera</button>
-              <button type="button" class="btn btn-secondary" id="btnPickPhoto">Library</button>
+          </div>
+        </section>
+
+        <!-- YOU (profile tab) -->
+        <section class="screen screen--tab" data-screen="profile" id="screenProfile">
+          <div class="tab-scroll">
+            <div class="profile-header">
+              <div class="profile-avatar" id="profileAvatar">?</div>
+              <div>
+                <h1 class="profile-name" id="profileName">Guest</h1>
+                <p class="profile-handle mono" id="profileHandle">@guest · sign in</p>
+              </div>
             </div>
-            <label class="btn btn-ghost btn-block file-label">
-              Browse file
-              <input
-                type="file"
-                id="fileInput"
-                accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-                hidden
-              />
-            </label>
-            <button type="button" class="btn btn-primary btn-block" id="btnGenerate" disabled>
-              Generate my soundtrack
+            <div class="stats-row">
+              <div class="stat-card">
+                <div class="stat-value" id="statMoments">0</div>
+                <div class="stat-label">moments</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="statTracks">0</div>
+                <div class="stat-label">tracks</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value" id="statStreak">0</div>
+                <div class="stat-label">streak</div>
+              </div>
+            </div>
+
+            <button type="button" class="plus-upsell" data-nav="paywall">
+              <div class="plus-upsell-title">MomentAI Plus</div>
+              <div class="plus-upsell-sub">
+                Unlimited moments, 24+ track playlists, no watermark.
+              </div>
+              <span class="plus-upsell-cta">Try 7 days free</span>
             </button>
-            <p class="muted" id="permissionHint"></p>
-          </div>
-        </section>
 
-        <!-- LOADING -->
-        <section class="screen" data-screen="loading" id="screenLoading">
-          <div class="loading-stage">
-            <div class="loading-aura" aria-hidden="true"></div>
-            <h2 class="headline headline--sm">Reading the moment…</h2>
-            <p class="subcopy" id="loadingSub">Curating tracks…</p>
-            <div class="progress-track" aria-hidden="true">
-              <div class="progress-fill" id="loaderBar"></div>
-            </div>
-            <p class="mono" id="loadingPct">0%</p>
-          </div>
-        </section>
-
-        <!-- PLAYLIST -->
-        <section class="screen" data-screen="playlist" id="screenPlaylist">
-          <div class="screen-inner">
-            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
-            <p class="eyebrow" id="playlistMood">YOUR MOMENT</p>
-            <h2 class="headline headline--sm" id="playlistTitle">Your playlist</h2>
-            <p class="mono muted" id="playlistMeta">—</p>
-            <ul class="track-list" id="trackList"></ul>
-            <div class="btn-row btn-row--outputs">
-              <button type="button" class="btn btn-primary" id="btnSaveSpotify">
-                Save to Spotify
+            <div class="settings-list">
+              <button type="button" class="settings-row" id="btnProfileAuth">
+                <span>Account</span>
+                <span class="settings-value" id="settingsAuth">Sign in</span>
+                <span class="chevron">›</span>
               </button>
-              <button type="button" class="btn btn-secondary hidden" id="btnSaveAppleMusic">
-                Save to Apple Music
+              <div class="settings-row">
+                <span>Spotify</span>
+                <span class="settings-value settings-value--accent" id="settingsSpotify">Via Save</span>
+                <span class="chevron">›</span>
+              </div>
+              <button type="button" class="settings-row" id="btnManageSub">
+                <span>Manage subscription</span>
+                <span class="settings-value" id="settingsTier">Free</span>
+                <span class="chevron">›</span>
+              </button>
+              <button type="button" class="settings-row" id="btnSignOut">
+                <span>Sign out</span>
+                <span class="settings-value"></span>
+                <span class="chevron">›</span>
               </button>
             </div>
-            <div class="btn-row">
-              <button type="button" class="btn btn-secondary" id="btnOpenAnywhere">
-                Share / Open anywhere
-              </button>
-              <button type="button" class="btn btn-secondary" id="btnShare">Share card</button>
-            </div>
-            <p class="muted mono output-hint" id="appleMusicHint" hidden></p>
-            <button type="button" class="btn btn-ghost btn-block" id="btnSuggestMore">
-              Suggest more
-            </button>
-            <button type="button" class="btn btn-ghost btn-block" id="btnRegenerate">
-              Regenerate (Plus)
-            </button>
-            <audio id="previewAudio" preload="none"></audio>
-          </div>
-        </section>
 
-        <!-- SHARE -->
-        <section class="screen" data-screen="share" id="screenShare">
-          <div class="screen-inner">
-            <button type="button" class="btn btn-text" data-nav="playlist">‹ Back</button>
-            <p class="eyebrow">SHARE</p>
-            <h2 class="headline headline--sm">Share your moment</h2>
-            <div class="share-card" id="shareCardMount">
-              <p class="muted">Share card renders here after generation.</p>
-            </div>
-            <button type="button" class="btn btn-primary btn-block" id="btnNativeShare">
-              Share sheet
-            </button>
-          </div>
-        </section>
-
-        <!-- PAYWALL -->
-        <section class="screen" data-screen="paywall" id="screenPaywall">
-          <div class="screen-inner">
-            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
-            <p class="eyebrow">MOMENTAI PLUS</p>
-            <h2 class="headline">Unlimited soundtracks.</h2>
-            <p class="subcopy" id="paywallNote">
-              StoreKit / Play Billing via RevenueCat (Phase 6). No Stripe in native builds.
-            </p>
-            <div class="plan">
-              <h3>Plus</h3>
-              <p class="plan-price">$3.99 <span>/ month</span></p>
-              <ul>
-                <li>Unlimited moments</li>
-                <li>Longer playlists</li>
-                <li>Regenerate &amp; fine-tune</li>
-              </ul>
-              <button type="button" class="btn btn-primary btn-block" id="btnPurchase">
-                Start free trial
-              </button>
-              <button type="button" class="btn btn-ghost btn-block" id="btnRestore">
-                Restore purchases
-              </button>
-              <a
-                class="btn btn-ghost btn-block hidden"
-                id="btnWebCheckout"
-                href="https://momentai.dev"
-                target="_blank"
-                rel="noopener noreferrer"
-                >Web checkout (browser only)</a
-              >
-            </div>
-          </div>
-        </section>
-
-        <!-- ACCOUNT -->
-        <section class="screen" data-screen="account" id="screenAccount">
-          <div class="screen-inner">
-            <button type="button" class="btn btn-text" data-nav="home">‹ Back</button>
-            <p class="eyebrow">ACCOUNT</p>
-            <h2 class="headline headline--sm">Your account</h2>
-            <p class="subcopy" id="accountSummary">Not signed in</p>
-            <button type="button" class="btn btn-primary btn-block" id="btnAccountAuth">
-              Sign in
-            </button>
-            <button type="button" class="btn btn-ghost btn-block" id="btnSignOut">Sign out</button>
-
-            <section class="delete-panel" aria-labelledby="deleteTitle">
-              <h3 class="eyebrow" id="deleteTitle">DELETE ACCOUNT</h3>
+            <section class="delete-panel hidden" id="deletePanel" aria-labelledby="deleteTitle">
+              <h3 class="section-label" id="deleteTitle">Delete account</h3>
               <p class="muted">
                 Permanently removes your MomentAI account, history, and auth user. Re-enter your
                 password to confirm.
@@ -225,27 +172,271 @@
               </button>
             </section>
 
-            <p class="muted disclosures">
+            <p class="disclosures">
               <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>
               ·
               <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
-              ·
-              <a href="https://momentai.dev/delete-account.html" rel="noopener noreferrer"
-                >Web deletion form</a
-              >
-              (Play policy)
             </p>
+          </div>
+        </section>
+
+        <!-- CAPTURE (full-screen modal) -->
+        <section class="screen screen--modal" data-screen="capture" id="screenCapture">
+          <div class="capture-stage">
+            <div class="viewfinder-full" id="viewfinder">
+              <img id="capturePreview" class="capture-preview hidden" alt="Selected moment" />
+              <p class="viewfinder-hint" id="viewfinderHint">rear camera</p>
+            </div>
+            <button type="button" class="capture-close" data-action="back-tab" aria-label="Close">
+              ✕
+            </button>
+            <div class="selfie-pip">
+              <span class="mono dim">you</span>
+            </div>
+            <div class="mood-chips" role="group" aria-label="Mood presets">
+              <button type="button" class="mood-chip mood-chip--active" data-chip="Golden hour">
+                golden hour
+              </button>
+              <button type="button" class="mood-chip" data-chip="Warm light">warm light</button>
+            </div>
+            <div class="capture-controls">
+              <p class="capture-note mono">no retakes · this is the moment</p>
+              <div class="capture-bar">
+                <button type="button" class="roll-btn" id="btnOpenPicker">
+                  <span class="roll-thumb"></span>
+                  <span class="mono">roll</span>
+                </button>
+                <button type="button" class="shutter-btn" id="btnShutter" aria-label="Capture">
+                  <span class="shutter-core"></span>
+                </button>
+                <button type="button" class="flip-btn hidden" id="btnFlip" aria-label="Flip camera" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M7 7h10l-2-2M17 17H7l2 2"></path>
+                    <path d="M20 12a8 8 0 0 0-8-8"></path>
+                    <path d="M4 12a8 8 0 0 0 8 8"></path>
+                  </svg>
+                  <span class="mono">flip</span>
+                </button>
+                <div class="flip-spacer" aria-hidden="true"></div>
+              </div>
+            </div>
+            <input
+              type="file"
+              id="fileInput"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              hidden
+            />
+            <textarea id="customPrompt" class="hidden" rows="1"></textarea>
+            <p class="muted capture-permission" id="permissionHint"></p>
+          </div>
+        </section>
+
+        <!-- CAMERA ROLL picker -->
+        <section class="screen screen--modal" data-screen="picker" id="screenPicker">
+          <div class="picker-stage">
+            <header class="picker-header">
+              <button type="button" class="btn-text" data-nav="capture">Cancel</button>
+              <span class="picker-title">Camera roll</span>
+              <span class="mono dim">Albums ›</span>
+            </header>
+            <p class="picker-sub mono">pick a photo — we'll score it in seconds</p>
+            <div class="picker-grid" id="pickerGrid">
+              <button type="button" class="picker-tile" id="btnPickPhoto">
+                <span class="mono">library</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- LOADING -->
+        <section class="screen screen--modal" data-screen="loading" id="screenLoading">
+          <div class="loading-stage">
+            <div class="loading-blob loading-blob--blue" aria-hidden="true"></div>
+            <div class="loading-blob loading-blob--amber" aria-hidden="true"></div>
+            <h2 class="loading-headline">Reading the moment…</h2>
+            <p class="loading-sub" id="loadingSub">Curating tracks…</p>
+            <div class="spinner-ring" aria-hidden="true"></div>
+            <div class="loading-pill" id="loadingPhase">Reading the light…</div>
+            <p class="mono loading-pct" id="loadingPct">0% · matching to spotify</p>
+          </div>
+        </section>
+
+        <!-- PLAYLIST -->
+        <section class="screen screen--modal" data-screen="playlist" id="screenPlaylist">
+          <div class="modal-scroll">
+            <button type="button" class="btn-text" data-action="back-tab">‹ Back</button>
+            <p class="eyebrow" id="playlistMood">YOUR MOMENT</p>
+            <div class="playlist-header">
+              <div class="playlist-cover" id="playlistCover"></div>
+              <div>
+                <h2 class="playlist-title" id="playlistTitle">Your playlist</h2>
+                <p class="mono muted" id="playlistMeta">—</p>
+              </div>
+            </div>
+            <div class="action-row btn-row--outputs">
+              <button type="button" class="btn btn-primary btn-flex" id="btnSaveSpotify">
+                Save to Spotify
+              </button>
+              <button type="button" class="btn btn-secondary btn-flex hidden" id="btnSaveAppleMusic">
+                Save to Apple Music
+              </button>
+              <button type="button" class="btn btn-icon" id="btnShare" aria-label="Share card">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M4 12v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8"></path>
+                  <polyline points="16 6 12 2 8 6"></polyline>
+                  <line x1="12" y1="2" x2="12" y2="15"></line>
+                </svg>
+              </button>
+              <button type="button" class="btn btn-icon btn-icon--muted" id="btnRegenerate" aria-label="Regenerate">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                  <path d="M21 3v5h-5"></path>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                  <path d="M3 21v-5h5"></path>
+                </svg>
+              </button>
+            </div>
+            <button type="button" class="btn btn-secondary btn-block" id="btnOpenAnywhere">
+              Share / Open anywhere
+            </button>
+            <p class="muted mono output-hint" id="appleMusicHint" hidden></p>
+            <ul class="track-list" id="trackList"></ul>
+            <button type="button" class="btn btn-ghost btn-block" id="btnSuggestMore">
+              Suggest more
+            </button>
+            <audio id="previewAudio" preload="none"></audio>
+          </div>
+        </section>
+
+        <!-- SHARE -->
+        <section class="screen screen--modal" data-screen="share" id="screenShare">
+          <div class="modal-scroll">
+            <button type="button" class="btn-text" data-nav="playlist">‹ Back</button>
+            <p class="eyebrow">SHARE YOUR MOMENT</p>
+            <div class="share-card-wrap" id="shareCardMount">
+              <p class="muted">Share card renders here after generation.</p>
+            </div>
+            <div class="share-actions">
+              <button type="button" class="btn btn-primary" id="btnDownloadShare">Download</button>
+              <button type="button" class="btn btn-secondary" id="btnCopyLink">Copy link</button>
+              <button type="button" class="btn btn-secondary" id="btnNativeShare">IG story</button>
+            </div>
+            <p class="share-footnote mono">
+              anyone with the link can listen — no account needed
+            </p>
+          </div>
+        </section>
+
+        <!-- PAYWALL -->
+        <section class="screen screen--modal" data-screen="paywall" id="screenPaywall">
+          <div class="modal-scroll paywall-scroll">
+            <button type="button" class="capture-close capture-close--paywall" data-action="back-tab">
+              ✕
+            </button>
+            <p class="eyebrow">MOMENTAI PLUS</p>
+            <h2 class="page-title page-title--center">Unlimited soundtracks.</h2>
+            <p class="subcopy subcopy--center" id="paywallNote">
+              Every moment you catch, scored. No daily cap.
+            </p>
+
+            <div class="plan plan--plus">
+              <span class="plan-badge">7 DAYS FREE</span>
+              <h3>MomentAI Plus</h3>
+              <p class="plan-price" id="planPrice">$4.00 <span>/ month</span></p>
+              <ul>
+                <li>Unlimited moments</li>
+                <li>24+ track playlists</li>
+                <li>Regenerate &amp; fine-tune</li>
+                <li>Deep photo read</li>
+                <li>Premium unwatermarked cards</li>
+              </ul>
+              <button type="button" class="btn btn-primary btn-block" id="btnPurchase">
+                Start 7 days free
+              </button>
+              <button type="button" class="btn btn-ghost btn-block" id="btnRestore">
+                Restore purchases
+              </button>
+              <a
+                class="btn btn-ghost btn-block hidden"
+                id="btnWebCheckout"
+                href="https://momentai.dev"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Web checkout (browser only)</a
+              >
+            </div>
+
+            <div class="plan plan--free">
+              <h3>Free</h3>
+              <ul>
+                <li>3 moments/day</li>
+                <li>15-track playlists</li>
+                <li>Watermarked cards</li>
+              </ul>
+            </div>
+
+            <p class="subscription-legal" id="subscriptionLegal">
+              MomentAI Plus is an auto-renewable subscription. Payment is charged to your Apple ID
+              account at confirmation of purchase. The subscription renews monthly unless canceled
+              at least 24 hours before the end of the current period. After a free trial, you will
+              be charged the subscription price unless you cancel. Manage or cancel in
+              <button type="button" class="accent-link" id="btnManageSubInline">Settings → Subscriptions</button>.
+              Price shown in the Apple purchase sheet is authoritative if it differs from this screen.
+            </p>
+            <p class="paywall-legal-links">
+              <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>
+              ·
+              <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms of Use</a>
+              ·
+              <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/" rel="noopener noreferrer"
+                >Apple EULA</a
+              >
+            </p>
+            <p class="mono footnote-center">cancel anytime · your playlists stay yours</p>
           </div>
         </section>
       </main>
 
-      <footer class="app-footer">
-        <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy</a>
-        <span aria-hidden="true">·</span>
-        <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
-        <span aria-hidden="true">·</span>
-        <button type="button" class="footer-link-btn" data-nav="account">Account</button>
-      </footer>
+      <!-- TAB BAR -->
+      <nav class="tab-bar" aria-label="Main navigation">
+        <button type="button" class="tab-item tab-item--active" data-tab="home" data-nav="home">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z"></path>
+          </svg>
+          <span>Now</span>
+        </button>
+        <button type="button" class="tab-item" data-tab="moments" data-nav="moments">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect>
+            <rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect>
+            <rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect>
+            <rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect>
+          </svg>
+          <span>Moments</span>
+        </button>
+        <button type="button" class="tab-item tab-item--capture" data-nav="capture" aria-label="Capture">
+          <span class="capture-fab">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1d1509" stroke-width="2">
+              <path d="M4 8h3l1.5-2.5h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"></path>
+              <circle cx="12" cy="13" r="3.4"></circle>
+            </svg>
+          </span>
+        </button>
+        <button type="button" class="tab-item" data-tab="discover" data-nav="discover">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M15.6 8.4 13.4 13.4 8.4 15.6 10.6 10.6z"></path>
+          </svg>
+          <span>Discover</span>
+        </button>
+        <button type="button" class="tab-item" data-tab="profile" data-nav="profile">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="8" r="4"></circle>
+            <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6"></path>
+          </svg>
+          <span>You</span>
+        </button>
+      </nav>
     </div>
 
     <!-- AUTH MODAL -->
@@ -264,6 +455,12 @@
           autocomplete="current-password"
         />
         <button type="button" class="btn btn-primary btn-block" id="btnAuthSubmit">Sign in</button>
+        <p class="auth-legal muted">
+          By continuing you agree to our
+          <a href="https://momentai.dev/terms.html" rel="noopener noreferrer">Terms</a>
+          and
+          <a href="https://momentai.dev/privacy.html" rel="noopener noreferrer">Privacy Policy</a>.
+        </p>
         <div class="btn-row">
           <button type="button" class="btn btn-ghost" id="btnAuthToggle">Create account</button>
           <button type="button" class="btn btn-ghost" id="btnAuthReset">Reset password</button>

@@ -28,27 +28,27 @@
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>MomentAI uses the camera to capture a photo of your moment.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>MomentAI reads a photo from your library to curate a playlist.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>MomentAI may save share cards to your photo library when you choose to download them.</string>
 	<key>NSAppleMusicUsageDescription</key>
 	<string>MomentAI saves playlists to your Apple Music library when you choose Save to Apple Music.</string>
 	<key>CFBundleURLTypes</key>

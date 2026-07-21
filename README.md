@@ -14,7 +14,8 @@ cp .env.example .env   # optional — auth config also loads from the API
 npm run dev            # http://localhost:5173
 ```
 
-Full instructions: **[docs/testing.md](./docs/testing.md)**.
+Full instructions: **[docs/testing.md](./docs/testing.md)**.  
+App Store path (Developer account → Review): **[docs/app-store-launch-plan.md](./docs/app-store-launch-plan.md)**.
 
 Native Android/iOS need Android Studio or a Mac. Store IAP needs RevenueCat keys.
 
