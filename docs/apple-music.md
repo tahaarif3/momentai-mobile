@@ -10,9 +10,9 @@ Mobile JS dark-launches **Save to Apple Music** when:
 1. Create a MusicKit key in Apple Developer.
 2. Set on the API host:
    - `APPLE_MUSIC_ENABLED=true`
-   - `APPLE_MUSIC_TEAM_ID`
-   - `APPLE_MUSIC_KEY_ID`
-   - `APPLE_MUSIC_PRIVATE_KEY` (PEM, `\n` escaped OK)
+   - `APPLE_MUSIC_TEAM_ID=Y6PG237H4X`
+   - `APPLE_MUSIC_KEY_ID` (from the MusicKit key)
+   - `APPLE_MUSIC_PRIVATE_KEY` (PEM, `\n` escaped OK — never ship in the app)
 3. Confirm `GET /api/apple/dev-token` returns a JWT.
 
 ## iOS project

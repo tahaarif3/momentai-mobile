@@ -55,8 +55,8 @@ Do NOT delete API routes. Flag-off interactive UI only.
 
 ```
 APPLE_MUSIC_ENABLED=true          # when ready
-APPLE_MUSIC_TEAM_ID=…
-APPLE_MUSIC_KEY_ID=…
+APPLE_MUSIC_TEAM_ID=Y6PG237H4X
+APPLE_MUSIC_KEY_ID=…              # from MusicKit key in Apple Developer
 APPLE_MUSIC_PRIVATE_KEY=…         # PEM; never in mobile bundle
 # WEB_INTERACTIVE_UI_ENABLED=true  # leave on until analytics cycle; then false
 ```
