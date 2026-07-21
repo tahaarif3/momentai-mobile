@@ -3,5 +3,5 @@ appId: dev.momentai.app
 ---
 - launchApp
 - assertVisible: "MomentAI"
-- tapOn: "Capture a moment"
-- assertVisible: "Frame the moment."
+- tapOn: "Capture this moment"
+- assertVisible: "no retakes"
