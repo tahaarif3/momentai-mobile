@@ -2,7 +2,12 @@ import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Browser } from '@capacitor/browser';
-import { initRouter, showScreen, registerScreen } from './app/router.js';
+import {
+  initRouter,
+  showScreen,
+  registerScreen,
+  goBackToTab,
+} from './app/router.js';
 import {
   processImage,
   fetchHistory,
@@ -23,7 +28,7 @@ import {
 } from './lib/auth.js';
 import { captureMoment, fileFromInput } from './lib/camera.js';
 import { watchJob, resumeActiveJob } from './lib/jobProgress.js';
-import { sharePlaylistCard, rasterizeShareCard } from './lib/share.js';
+import { sharePlaylistCard, rasterizeShareCard, buildShareCardDom } from './lib/share.js';
 import {
   initBilling,
   purchasePremium,
@@ -33,12 +38,17 @@ import {
 } from './lib/billing.js';
 import { initObservability, track, captureError, platformName } from './lib/analytics.js';
 
+const LOADING_PHASES = ['Reading the light…', 'Matching the mood…', 'Curating tracks…'];
+
 const state = {
   user: null,
   stagedFile: null,
   generation: null,
   authMode: 'signin',
-  moodChip: '',
+  moodChip: 'Golden hour',
+  historyRows: [],
+  momentFilter: 'all',
+  shareDataUrl: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -52,13 +62,14 @@ function toast(message) {
   toast._t = window.setTimeout(() => el.classList.add('hidden'), 2800);
 }
 
-function setLoader(pct, message) {
-  const bar = $('loaderBar');
-  const msg = $('loadingSub');
+function setLoader(pct, phaseIdx) {
+  const phase = LOADING_PHASES[phaseIdx] ?? LOADING_PHASES[0];
   const pctEl = $('loadingPct');
-  if (bar) bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
-  if (msg && message) msg.textContent = message;
-  if (pctEl) pctEl.textContent = `${Math.round(pct)}%`;
+  const phaseEl = $('loadingPhase');
+  const sub = $('loadingSub');
+  if (phaseEl) phaseEl.textContent = phase;
+  if (pctEl) pctEl.textContent = `${Math.round(pct)}% · matching to spotify`;
+  if (sub) sub.textContent = pct >= 66 ? 'Curating tracks…' : 'Curating tracks…';
 }
 
 function openAuthModal() {
@@ -78,33 +89,74 @@ function syncAuthUi() {
   }
 }
 
-function renderAccount() {
-  const el = $('accountSummary');
-  const counter = $('momentsCounter');
-  const authBtn = $('btnAuth');
-  const accountAuth = $('btnAccountAuth');
+function userDisplayName() {
+  if (!state.user) return 'there';
+  return state.user.displayName || state.user.email?.split('@')[0] || 'there';
+}
+
+function userInitial() {
+  const n = userDisplayName();
+  return n.charAt(0).toUpperCase();
+}
+
+function formatGoldenHourLeft() {
+  const now = new Date();
+  const sunset = new Date(now);
+  sunset.setHours(20, 0, 0, 0);
+  if (now > sunset) sunset.setDate(sunset.getDate() + 1);
+  const diff = Math.max(0, sunset - now);
+  const h = Math.floor(diff / 3600000);
+  const m = Math.floor((diff % 3600000) / 60000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} LEFT`;
+}
+
+function renderMomentsCounter() {
+  const el = $('momentsCounter');
+  if (!el) return;
   if (!state.user) {
-    if (el) el.textContent = 'Not signed in';
-    if (counter) counter.textContent = 'Free moments · sign in to track usage';
-    if (authBtn) authBtn.textContent = 'Sign in';
-    if (accountAuth) accountAuth.textContent = 'Sign in';
+    el.innerHTML = 'Free moments · <button type="button" class="accent-link" data-nav="profile">sign in ›</button>';
+    el.querySelector('[data-nav]')?.addEventListener('click', () => showScreen('profile'));
     return;
   }
-  const rem = state.user.momentsRemainingToday;
-  const limit = state.user.dailyUploadLimit;
-  if (el) {
-    el.textContent =
-      `${state.user.email || state.user.displayName} · ${state.user.tier}` +
-      (limit != null ? ` · ${rem}/${limit} moments today` : ' · unlimited');
+  if (state.user.tier === 'premium') {
+    el.innerHTML =
+      'Unlimited moments · <button type="button" class="accent-link" data-nav="paywall">manage ›</button>';
+  } else {
+    const rem = state.user.momentsRemainingToday ?? '—';
+    const limit = state.user.dailyUploadLimit ?? 3;
+    el.innerHTML = `${rem} of ${limit} free moments left today · <button type="button" class="accent-link" data-nav="paywall">go unlimited ›</button>`;
   }
-  if (counter) {
-    counter.textContent =
-      state.user.tier === 'premium'
-        ? 'Unlimited moments (Plus)'
-        : `${rem ?? '—'} free moments left today`;
+  el.querySelectorAll('[data-nav]').forEach((btn) => {
+    btn.addEventListener('click', () => showScreen(btn.dataset.nav));
+  });
+}
+
+function renderProfile() {
+  const name = state.user ? userDisplayName() : 'Guest';
+  if ($('profileName')) $('profileName').textContent = name;
+  if ($('profileAvatar')) $('profileAvatar').textContent = userInitial();
+  if ($('profileHandle')) {
+    $('profileHandle').textContent = state.user
+      ? `@${state.user.email?.split('@')[0] || 'user'} · ${state.user.tier || 'free'}`
+      : '@guest · sign in';
   }
-  if (authBtn) authBtn.textContent = 'Account';
-  if (accountAuth) accountAuth.textContent = 'Signed in';
+  if ($('settingsAuth')) {
+    $('settingsAuth').textContent = state.user ? 'Signed in' : 'Sign in';
+  }
+  if ($('settingsTier')) {
+    $('settingsTier').textContent =
+      state.user?.tier === 'premium' ? 'Plus' : 'Free';
+  }
+  if ($('heroHeadline')) {
+    $('heroHeadline').textContent = `Catch the light, ${name}.`;
+  }
+  if ($('goldenHourLabel')) {
+    $('goldenHourLabel').textContent = `GOLDEN HOUR · ${formatGoldenHourLeft()}`;
+  }
+  if ($('deletePanel')) {
+    $('deletePanel').classList.toggle('hidden', !state.user);
+  }
+  renderMomentsCounter();
 }
 
 function escapeHtml(s) {
@@ -115,49 +167,124 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-async function refreshHistory() {
+function momentTileHtml(m, thumbH = 118) {
+  const thumb = (m.display_image || m.image_thumb || '').replace(/'/g, '%27');
+  const title = escapeHtml(m.emotional_vibe || m.playlist_name || 'Moment');
+  const meta = escapeHtml(`${m.track_count || '—'} tracks · ${m.created_at?.slice(0, 10) || 'recent'}`);
+  return `<button type="button" class="moment-tile" data-id="${m.id}">
+    <div class="moment-tile-thumb" style="height:${thumbH}px;background-image:url('${thumb}')"></div>
+    <div class="moment-tile-body">
+      <div class="moment-tile-title">${title}</div>
+      <div class="moment-tile-meta">${meta}</div>
+    </div>
+  </button>`;
+}
+
+function bindMomentTiles(container) {
+  container?.querySelectorAll('.moment-tile').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      try {
+        const full = await fetchGeneration(btn.dataset.id);
+        applyGeneration(full);
+        showScreen('playlist');
+      } catch (err) {
+        toast(err.message);
+      }
+    });
+  });
+}
+
+function filterMoments(rows) {
+  if (state.momentFilter === 'all') return rows;
+  if (state.momentFilter === 'month') {
+    const now = new Date();
+    return rows.filter((m) => {
+      const d = new Date(m.created_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+  }
+  if (state.momentFilter === 'golden') {
+    return rows.filter((m) =>
+      /golden|sunset|warm|hour/i.test(m.emotional_vibe || m.playlist_name || ''),
+    );
+  }
+  if (state.momentFilter === 'night') {
+    return rows.filter((m) =>
+      /night|dark|midnight|drive/i.test(m.emotional_vibe || m.playlist_name || ''),
+    );
+  }
+  return rows;
+}
+
+function renderMomentsGrids(rows) {
+  const filtered = filterMoments(rows);
+  const totalTracks = filtered.reduce((n, m) => n + (m.track_count || 0), 0);
+
+  if ($('momentsPageMeta')) {
+    $('momentsPageMeta').textContent = `${filtered.length} moments · ${totalTracks} tracks`;
+  }
+  if ($('statMoments')) $('statMoments').textContent = String(rows.length);
+  if ($('statTracks')) $('statTracks').textContent = String(totalTracks);
+
+  const homeGrid = $('homeMomentsGrid');
+  if (homeGrid) {
+    if (!rows.length) {
+      homeGrid.innerHTML =
+        '<p class="muted empty-state">No moments yet — capture one.</p>';
+    } else {
+      homeGrid.innerHTML = rows.slice(0, 2).map((m) => momentTileHtml(m)).join('');
+      bindMomentTiles(homeGrid);
+    }
+  }
+
   const grid = $('momentsGrid');
-  if (!grid) return;
+  if (grid) {
+    if (!filtered.length) {
+      grid.innerHTML = '<p class="muted empty-state">No moments match this filter.</p>';
+    } else {
+      grid.innerHTML = filtered.map((m) => momentTileHtml(m, 126)).join('');
+      bindMomentTiles(grid);
+    }
+  }
+}
+
+function renderDiscover() {
+  const list = $('discoverList');
+  const meta = $('discoverMeta');
+  if (!list) return;
+  // Placeholder until shared-playlist API exists
+  if (meta) meta.textContent = '0 playlists from friends';
+  list.innerHTML = '<p class="muted empty-state">No shared playlists yet.</p>';
+  if ($('friendsScroll')) {
+    $('friendsScroll').innerHTML =
+      '<p class="muted empty-state empty-state--inline">No shared playlists yet.</p>';
+  }
+}
+
+async function refreshHistory() {
   if (!state.user) {
-    grid.innerHTML = '<p class="muted empty-state">Sign in to see saved moments.</p>';
-    if ($('momentsCount')) $('momentsCount').textContent = '0 saved';
+    state.historyRows = [];
+    renderMomentsGrids([]);
+    renderDiscover();
+    renderProfile();
     return;
   }
   try {
     const data = await fetchHistory();
     const rows = data.history || [];
-    if ($('momentsCount')) $('momentsCount').textContent = `${rows.length} saved`;
+    state.historyRows = rows;
     if (state.user) {
       state.user.momentsRemainingToday = data.remainingToday;
       state.user.dailyUploadLimit = data.dailyUploadLimit;
-      renderAccount();
     }
-    if (!rows.length) {
-      grid.innerHTML = '<p class="muted empty-state">No moments yet — capture one.</p>';
-      return;
-    }
-    grid.innerHTML = rows
-      .map((m) => {
-        const thumb = (m.display_image || m.image_thumb || '').replace(/'/g, '%27');
-        return `<button type="button" class="moment-card" data-id="${m.id}">
-          <div class="moment-thumb" style="background-image:url('${thumb}')"></div>
-          <div class="moment-meta">${escapeHtml(m.emotional_vibe || m.playlist_name || 'Moment')}</div>
-        </button>`;
-      })
-      .join('');
-    grid.querySelectorAll('.moment-card').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          const full = await fetchGeneration(btn.dataset.id);
-          applyGeneration(full);
-          showScreen('playlist');
-        } catch (err) {
-          toast(err.message);
-        }
-      });
-    });
+    renderMomentsGrids(rows);
+    renderDiscover();
+    renderProfile();
   } catch (err) {
-    grid.innerHTML = `<p class="muted empty-state">${escapeHtml(err.message)}</p>`;
+    const homeGrid = $('homeMomentsGrid');
+    if (homeGrid) {
+      homeGrid.innerHTML = `<p class="muted empty-state">${escapeHtml(err.message)}</p>`;
+    }
   }
 }
 
@@ -165,7 +292,7 @@ function applyGeneration(result) {
   const tracks = result.tracks || result.playlist?.tracks || [];
   state.generation = {
     id: result.generationId || result.id || null,
-    imagePath: result.imagePath || result.imageUrl || null,
+    imagePath: result.imagePath || result.imageUrl || result.display_image || null,
     metadata: result.metadata || {},
     tracks,
     suggestedTracks: result.suggestedTracks || [],
@@ -179,7 +306,21 @@ function applyGeneration(result) {
   if ($('playlistMood')) {
     $('playlistMood').textContent = result.metadata?.environmentalContext || 'YOUR MOMENT';
   }
-  if ($('playlistMeta')) $('playlistMeta').textContent = `${tracks.length} tracks · ready`;
+  const bpm = result.metadata?.bpm || result.metadata?.tempo;
+  const dur = tracks.length ? `${tracks.length} tracks` : '—';
+  if ($('playlistMeta')) {
+    $('playlistMeta').textContent = [
+      state.moodChip?.toLowerCase() || 'mood',
+      bpm ? `${bpm} bpm` : null,
+      dur,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  const cover = $('playlistCover');
+  if (cover && state.generation.imagePath) {
+    cover.style.backgroundImage = `url('${state.generation.imagePath.replace(/'/g, '%27')}')`;
+  }
   renderTracks();
 }
 
@@ -190,16 +331,25 @@ function renderTracks() {
   list.innerHTML = tracks
     .map((t, i) => {
       const artist = t.artists?.[0]?.name || t.artist || '';
-      return `<li data-i="${i}">
-        <span>${escapeHtml(t.name || t.title || 'Track')}</span>
-        <button type="button" class="btn btn-ghost btn-mini" data-preview="${i}">▶</button>
-        <span class="muted">${escapeHtml(String(artist))}</span>
+      const match = t.match_score ?? t.matchScore ?? Math.floor(70 + Math.random() * 25);
+      const dur = t.duration_ms
+        ? `${Math.floor(t.duration_ms / 60000)}:${String(Math.floor((t.duration_ms % 60000) / 1000)).padStart(2, '0')}`
+        : '—';
+      return `<li class="track-row" data-i="${i}">
+        <span class="track-index">${String(i + 1).padStart(2, '0')}</span>
+        <div class="track-art"></div>
+        <div>
+          <div class="track-name">${escapeHtml(t.name || t.title || 'Track')}</div>
+          <div class="track-artist">${escapeHtml(String(artist))}</div>
+        </div>
+        <span class="track-match">${match}%</span>
+        <span class="track-dur">${dur}</span>
       </li>`;
     })
     .join('');
-  list.querySelectorAll('[data-preview]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const t = tracks[Number(btn.dataset.preview)];
+  list.querySelectorAll('.track-row').forEach((row) => {
+    row.addEventListener('click', () => {
+      const t = tracks[Number(row.dataset.i)];
       const audio = $('previewAudio');
       if (t?.preview_url && audio) {
         audio.src = t.preview_url;
@@ -220,14 +370,22 @@ async function beginWithFile(file) {
     preview.classList.remove('hidden');
   }
   $('viewfinderHint')?.classList.add('hidden');
-  if ($('btnGenerate')) $('btnGenerate').disabled = false;
   if ($('permissionHint')) $('permissionHint').textContent = '';
+
+  const pickerGrid = $('pickerGrid');
+  if (pickerGrid) {
+    pickerGrid.innerHTML = `<button type="button" class="picker-tile" id="btnPickPhoto">
+      <img src="${url}" alt="Selected" />
+    </button>`;
+    $('btnPickPhoto')?.addEventListener('click', () => showScreen('picker'));
+  }
 }
 
 async function stageFromNative(source) {
   try {
     const file = await captureMoment({ source });
     await beginWithFile(file);
+    if (source === 'photos') showScreen('capture');
   } catch (err) {
     if (err.message === 'WEB_FILE_PICKER' || !Capacitor.isNativePlatform()) {
       $('fileInput')?.click();
@@ -242,10 +400,10 @@ async function stageFromNative(source) {
 function attachJobWatchers(jobId, progressToken) {
   return watchJob(jobId, progressToken, {
     onProgress: (p) => {
-      if (p.stage === 'analyzing') setLoader(25, 'Reading the light…');
-      else if (p.stage === 'resolving') setLoader(60, 'Matching the mood…');
-      else if (p.stage === 'finalizing') setLoader(90, 'Curating tracks…');
-      else if (p.message) setLoader(40, p.message);
+      const pct = p.percent ?? (p.stage === 'analyzing' ? 25 : p.stage === 'resolving' ? 60 : 90);
+      const phaseIdx =
+        p.stage === 'analyzing' ? 0 : p.stage === 'resolving' ? 1 : p.stage === 'finalizing' ? 2 : 0;
+      setLoader(pct, phaseIdx);
     },
     onComplete: (result) => {
       applyGeneration(result);
@@ -268,11 +426,11 @@ async function runGeneration() {
   }
   const prompt = ($('customPrompt')?.value || state.moodChip || '').trim();
   showScreen('loading');
-  setLoader(8, 'Uploading…');
+  setLoader(8, 0);
   try {
     const data = await processImage(state.stagedFile, prompt);
     if (data.jobId) {
-      setLoader(15, 'Reading the light…');
+      setLoader(15, 0);
       attachJobWatchers(data.jobId, data.progressToken);
     } else {
       applyGeneration(data.result || data);
@@ -302,18 +460,23 @@ function bindNavigation() {
       showScreen(target);
     });
   });
+
+  document.querySelectorAll('[data-action="back-tab"]').forEach((el) => {
+    el.addEventListener('click', () => goBackToTab());
+  });
 }
 
 async function renderSharePreview() {
   if (!state.generation || !$('shareCardMount')) return;
-  const dataUrl = await rasterizeShareCard({
+  const opts = {
     title: state.generation.metadata?.emotionalVibe || 'Your moment',
-    moodLine: state.generation.metadata?.environmentalContext || '',
+    moodLine: state.generation.metadata?.environmentalContext || state.moodChip || '',
     imageUrl: state.generation.imagePath,
-    playlistMeta: 'momentai.dev',
-  });
-  $('shareCardMount').innerHTML =
-    `<img src="${dataUrl}" alt="Share card preview" style="width:100%;border-radius:12px" />`;
+    playlistMeta: 'momentai.app',
+    dateLabel: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+  };
+  $('shareCardMount').innerHTML = buildShareCardDom(opts);
+  state.shareDataUrl = await rasterizeShareCard(opts);
 }
 
 async function maybePreviewShare() {
@@ -328,12 +491,12 @@ async function maybePreviewShare() {
 async function doNativeShare() {
   if (!state.generation) return;
   try {
-    await renderSharePreview();
     await sharePlaylistCard({
       title: state.generation.metadata?.emotionalVibe || 'Your moment',
       moodLine: state.generation.metadata?.environmentalContext || '',
       imageUrl: state.generation.imagePath,
-      playlistMeta: 'momentai.dev',
+      playlistMeta: 'momentai.app',
+      dateLabel: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     });
   } catch (err) {
     toast(err.message || 'Share failed — check Spaces CORS for remote images.');
@@ -341,12 +504,9 @@ async function doNativeShare() {
 }
 
 function bindActions() {
-  $('btnAuth')?.addEventListener('click', () => {
-    if (state.user) showScreen('account');
-    else openAuthModal();
-  });
-  $('btnAccountAuth')?.addEventListener('click', () => {
+  $('btnProfileAuth')?.addEventListener('click', () => {
     if (!state.user) openAuthModal();
+    else toast('Signed in as ' + (state.user.email || 'user'));
   });
   $('btnAuthClose')?.addEventListener('click', closeAuthModal);
   $('btnAuthToggle')?.addEventListener('click', () => {
@@ -381,10 +541,10 @@ function bindActions() {
   $('btnSignOut')?.addEventListener('click', async () => {
     await signOut();
     state.user = null;
-    renderAccount();
+    renderProfile();
     refreshHistory();
     toast('Signed out');
-    showScreen('home');
+    showScreen('profile');
   });
   $('btnDeleteAccount')?.addEventListener('click', async () => {
     if (!state.user) {
@@ -400,7 +560,6 @@ function bindActions() {
       return;
     }
     try {
-      // Re-auth before destructive delete (store / compliance expectation)
       const email = state.user.email;
       if (!email) throw new Error('Account email missing — sign in again');
       await signInWithPassword(email, password);
@@ -409,37 +568,61 @@ function bindActions() {
       await signOut();
       state.user = null;
       if ($('deletePassword')) $('deletePassword').value = '';
-      renderAccount();
+      renderProfile();
       refreshHistory();
       toast('Account deleted');
-      showScreen('home');
+      showScreen('profile');
     } catch (err) {
       captureError(err);
       toast(err.message || 'Delete failed');
     }
   });
 
-  $('btnTakePhoto')?.addEventListener('click', () => stageFromNative('camera'));
+  $('btnOpenPicker')?.addEventListener('click', () => showScreen('picker'));
   $('btnPickPhoto')?.addEventListener('click', () => stageFromNative('photos'));
+  $('btnShutter')?.addEventListener('click', async () => {
+    if (state.stagedFile) {
+      await runGeneration();
+      return;
+    }
+    try {
+      await stageFromNative('camera');
+      if (state.stagedFile) await runGeneration();
+    } catch (err) {
+      toast(err.message || 'Capture failed');
+    }
+  });
+  $('btnFlip')?.addEventListener('click', () => toast('Camera flip coming soon'));
   $('fileInput')?.addEventListener('change', async (e) => {
     const raw = e.target.files?.[0];
     if (!raw) return;
     try {
       await beginWithFile(await fileFromInput(raw));
+      showScreen('capture');
     } catch (err) {
       toast(err.message);
     }
   });
-  $('btnGenerate')?.addEventListener('click', runGeneration);
 
   document.querySelectorAll('[data-chip]').forEach((chip) => {
     chip.addEventListener('click', () => {
-      document.querySelectorAll('[data-chip]').forEach((c) => c.setAttribute('aria-pressed', 'false'));
-      chip.setAttribute('aria-pressed', 'true');
+      document.querySelectorAll('[data-chip]').forEach((c) => {
+        c.classList.remove('mood-chip--active');
+      });
+      chip.classList.add('mood-chip--active');
       state.moodChip = chip.getAttribute('data-chip') || '';
-      if ($('customPrompt') && !$('customPrompt').value.trim()) {
-        $('customPrompt').value = state.moodChip;
-      }
+      if ($('customPrompt')) $('customPrompt').value = state.moodChip;
+    });
+  });
+
+  document.querySelectorAll('[data-filter]').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('[data-filter]').forEach((c) => {
+        c.classList.remove('chip--active');
+      });
+      chip.classList.add('chip--active');
+      state.momentFilter = chip.dataset.filter || 'all';
+      renderMomentsGrids(state.historyRows);
     });
   });
 
@@ -471,6 +654,27 @@ function bindActions() {
     await maybePreviewShare();
   });
   $('btnNativeShare')?.addEventListener('click', () => doNativeShare());
+  $('btnDownloadShare')?.addEventListener('click', async () => {
+    try {
+      await maybePreviewShare();
+      if (!state.shareDataUrl) return;
+      const a = document.createElement('a');
+      a.href = state.shareDataUrl;
+      a.download = 'momentai-share.png';
+      a.click();
+    } catch (err) {
+      toast(err.message);
+    }
+  });
+  $('btnCopyLink')?.addEventListener('click', () => {
+    const link = state.generation?.id
+      ? `https://momentai.dev/m/${state.generation.id}`
+      : 'https://momentai.dev';
+    navigator.clipboard?.writeText(link).then(
+      () => toast('Link copied'),
+      () => toast(link),
+    );
+  });
 
   $('btnSuggestMore')?.addEventListener('click', async () => {
     if (!state.generation) return;
@@ -496,7 +700,7 @@ function bindActions() {
       return;
     }
     showScreen('loading');
-    setLoader(10, 'Reading the light…');
+    setLoader(10, 0);
     try {
       const data = await regenerate(state.generation.id);
       if (data.jobId) attachJobWatchers(data.jobId, data.progressToken);
@@ -513,14 +717,13 @@ function bindActions() {
   $('btnPurchase')?.addEventListener('click', async () => {
     try {
       if (!Capacitor.isNativePlatform()) {
-        // Browser-only: send people to the website for Stripe
         await Browser.open({ url: 'https://momentai.dev' });
         return;
       }
       const { active } = await purchasePremium();
       toast(active ? 'Premium unlocked' : 'Purchase finished — entitlement syncing…');
       if (active && state.user) state.user.tier = 'premium';
-      renderAccount();
+      renderProfile();
     } catch (err) {
       captureError(err);
       toast(err.message || 'Purchase unavailable');
@@ -531,7 +734,7 @@ function bindActions() {
       const { active } = await restorePurchases();
       toast(active ? 'Purchases restored' : 'No active subscription found');
       if (active && state.user) state.user.tier = 'premium';
-      renderAccount();
+      renderProfile();
     } catch (err) {
       captureError(err);
       toast(err.message || 'Restore unavailable');
@@ -542,7 +745,17 @@ function bindActions() {
     $('btnWebCheckout')?.classList.remove('hidden');
   }
 
-  registerScreen('home', { onShow: () => refreshHistory() });
+  registerScreen('home', { onEnter: () => refreshHistory() });
+  registerScreen('moments', { onEnter: () => refreshHistory() });
+  registerScreen('profile', { onEnter: () => renderProfile() });
+  registerScreen('capture', {
+    onEnter: () => {
+      if (!state.stagedFile) {
+        $('capturePreview')?.classList.add('hidden');
+        $('viewfinderHint')?.classList.remove('hidden');
+      }
+    },
+  });
 }
 
 async function boot() {
@@ -552,6 +765,7 @@ async function boot() {
   bindNavigation();
   bindActions();
   syncAuthUi();
+  renderProfile();
 
   try {
     const compat = await fetchCompatibility();
@@ -574,7 +788,7 @@ async function boot() {
   await initAuth({
     onSession: async (user) => {
       state.user = user;
-      renderAccount();
+      renderProfile();
       refreshHistory();
       if (user?.id) await initBilling(user.id);
     },
@@ -586,8 +800,8 @@ async function boot() {
 
   if ($('paywallNote')) {
     $('paywallNote').textContent = isNativeBilling()
-      ? `Store billing on ${platformName()}. Stripe checkout is web-only.`
-      : 'Browser preview — native builds use App Store / Play (RevenueCat).';
+      ? `Every moment you catch, scored. No daily cap. (${platformName()})`
+      : 'Every moment you catch, scored. No daily cap.';
   }
 
   await resumeActiveJob({
@@ -598,7 +812,7 @@ async function boot() {
     },
     onProgress: (p) => {
       showScreen('loading');
-      if (p?.message) setLoader(40, p.message);
+      if (p?.message) setLoader(40, 0);
     },
     onError: (err) => console.warn('resume job', err.message),
   });

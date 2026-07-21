@@ -2,9 +2,7 @@ appId: dev.momentai.app
 ---
 - launchApp
 - assertVisible: "MomentAI"
-- tapOn: "Capture a moment"
-- assertVisible: "Frame the moment."
-- assertVisible: "Camera"
-- assertVisible: "Library"
-- assertVisible: "Browse file"
-- assertVisible: "Generate my soundtrack"
+- tapOn: "Capture this moment"
+- assertVisible: "no retakes"
+- assertVisible: "roll"
+- assertVisible: "flip"
