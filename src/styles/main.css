@@ -1107,6 +1107,7 @@ body.modal-open .tab-bar {
 
 .action-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 20px 0 16px;
   align-items: center;
@@ -1474,6 +1475,21 @@ body.modal-open .tab-bar {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.btn-row--outputs {
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.btn-row--single #btnSaveAppleMusic {
+  display: none !important;
+}
+
+.output-hint {
+  margin: 8px 0 0;
+  font-size: 0.75rem;
+  text-align: center;
 }
 
 .field-label {

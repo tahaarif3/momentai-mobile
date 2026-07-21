@@ -273,11 +273,14 @@
                 <p class="mono muted" id="playlistMeta">—</p>
               </div>
             </div>
-            <div class="action-row">
+            <div class="action-row btn-row--outputs">
               <button type="button" class="btn btn-primary btn-flex" id="btnSaveSpotify">
                 Save to Spotify
               </button>
-              <button type="button" class="btn btn-icon" id="btnShare" aria-label="Share">
+              <button type="button" class="btn btn-secondary btn-flex hidden" id="btnSaveAppleMusic">
+                Save to Apple Music
+              </button>
+              <button type="button" class="btn btn-icon" id="btnShare" aria-label="Share card">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M4 12v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8"></path>
                   <polyline points="16 6 12 2 8 6"></polyline>
@@ -293,6 +296,10 @@
                 </svg>
               </button>
             </div>
+            <button type="button" class="btn btn-secondary btn-block" id="btnOpenAnywhere">
+              Share / Open anywhere
+            </button>
+            <p class="muted mono output-hint" id="appleMusicHint" hidden></p>
             <ul class="track-list" id="trackList"></ul>
             <button type="button" class="btn btn-ghost btn-block" id="btnSuggestMore">
               Suggest more

@@ -7,6 +7,7 @@ test('env example documents required Vite keys', async () => {
   assert.match(env, /VITE_API_BASE=/);
   assert.match(env, /VITE_AUTH_REDIRECT_URL=/);
   assert.match(env, /momentai:\/\/auth\/callback/);
+  assert.match(env, /VITE_APPLE_ENABLED/);
 });
 
 test('capacitor config targets dist/mobile and app id', async () => {
@@ -28,4 +29,18 @@ test('job stream URL includes progressToken query', async () => {
     url,
     'https://momentai.dev/api/playlist/job/42/stream?progressToken=tok.abc',
   );
+});
+
+test('public playlist URL helper shape', async () => {
+  const base = 'https://momentai.dev';
+  const id = 'gen-abc';
+  assert.equal(`${base}/p/${id}`, 'https://momentai.dev/p/gen-abc');
+});
+
+test('results markup includes multi-target output buttons', async () => {
+  const fs = await import('node:fs/promises');
+  const html = await fs.readFile(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="btnOpenAnywhere"/);
+  assert.match(html, /id="btnSaveAppleMusic"/);
+  assert.match(html, /Share \/ Open anywhere/);
 });

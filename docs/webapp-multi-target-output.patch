@@ -1,0 +1,1274 @@
+From 4fe4699f861cb5d478b811a5b41006ef33c68873 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Tue, 21 Jul 2026 15:57:05 +0000
+Subject: [PATCH] Multi-target playlist output: ISRC, Odesli /p/:id, Apple
+ Music API
+
+Persist platform-agnostic track fields (isrc, appleCatalogId, odesliLink),
+always save generations for shareable /p/:id pages with OG tags, add
+public /generation/:id/links, Apple Music developer-token endpoint, and
+soft-flag interactive web UI retirement behind WEB_INTERACTIVE_UI_ENABLED.
+---
+ .env.example                       |  15 ++
+ docs/mobile-api.md                 |  47 ++++++-
+ package-lock.json                  |  10 ++
+ package.json                       |   1 +
+ src/clients/appleMusicClient.js    | 103 ++++++++++++++
+ src/clients/spotifyClient.js       |  56 +++++++-
+ src/public/continue-in-app.html    |  41 ++++++
+ src/public/landing-app.html        |  56 ++++++++
+ src/routes/apple.js                |  40 ++++++
+ src/routes/mobile.js               |  11 +-
+ src/routes/playlist.js             |  43 +++++-
+ src/server.js                      |  52 +++++++
+ src/services/publicPlaylistPage.js | 170 +++++++++++++++++++++++
+ src/services/trackLinkService.js   | 212 +++++++++++++++++++++++++++++
+ src/utils/moments.js               |  17 ++-
+ src/workers/playlistWorker.js      |  58 ++++----
+ tests/mobile_api.spec.js           |  38 ++++++
+ 17 files changed, 935 insertions(+), 35 deletions(-)
+ create mode 100644 src/clients/appleMusicClient.js
+ create mode 100644 src/public/continue-in-app.html
+ create mode 100644 src/public/landing-app.html
+ create mode 100644 src/routes/apple.js
+ create mode 100644 src/services/publicPlaylistPage.js
+ create mode 100644 src/services/trackLinkService.js
+
+diff --git a/.env.example b/.env.example
+index 765f41b..057e085 100644
+--- a/.env.example
++++ b/.env.example
+@@ -79,3 +79,18 @@ SPOTIFY_MASTER_REFRESH_TOKEN=
+ 
+ # Redis Configuration (Required for BullMQ async queue)
+ REDIS_URL=redis://127.0.0.1:6379
++
++# ─── Multi-target playlist output ───────────────────────────────────────────
++# Odesli / song.link (public API; optional override)
++# ODESLI_API_BASE=https://api.song.link/v1-alpha.1
++
++# Apple MusicKit (developer token signed server-side — never ship the private key)
++# Create a MusicKit key in Apple Developer → Keys, then set:
++# APPLE_MUSIC_ENABLED=true
++# APPLE_MUSIC_TEAM_ID=XXXXXXXXXX
++# APPLE_MUSIC_KEY_ID=XXXXXXXXXX
++# APPLE_MUSIC_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
++
++# Soft-retire interactive web generation UI (landing + /p/:id + legal stay live)
++# Flag-off → observe analytics → then delete. Default: interactive UI ON.
++# WEB_INTERACTIVE_UI_ENABLED=true
+diff --git a/docs/mobile-api.md b/docs/mobile-api.md
+index d2faf9a..77789e3 100644
+--- a/docs/mobile-api.md
++++ b/docs/mobile-api.md
+@@ -6,6 +6,8 @@ Job progress (SSE/poll): owner JWT **or** `progressToken` from `POST /process`.
+ 
+ Spotify playlist **export uses the master Spotify account** (unchanged). Clients open the returned playlist URL.
+ 
++Multi-target output: generations persist **platform-agnostic tracks** (`isrc`, optional `appleCatalogId`, `odesliLink`). Clients share `shareUrl` (`/p/:id`) or save to Apple Music / Spotify adapters.
++
+ ## Compatibility
+ 
+ `GET /api/mobile/compatibility` (public)
+@@ -22,7 +24,10 @@ Spotify playlist **export uses the master Spotify account** (unchanged). Clients
+   "features": {
+     "masterSpotifyExport": true,
+     "storeBilling": false,
+-    "stripeCheckoutInApp": false
++    "stripeCheckoutInApp": false,
++    "multiTargetLinks": true,
++    "appleMusicSave": false,
++    "appleMusicDevToken": false
+   }
+ }
+ ```
+@@ -41,16 +46,38 @@ Spotify playlist **export uses the master Spotify account** (unchanged). Clients
+ 
+ | Method | Path | Notes |
+ |--------|------|--------|
+-| POST | `/api/playlist/process` | multipart `image` (+ optional `customPrompt`). Accepts JPEG/PNG/WebP/HEIC. Target **2–4 MB JPEG** client-side. |
++| POST | `/api/playlist/process` | multipart `image` (+ optional `customPrompt`). Accepts JPEG/PNG/WebP/HEIC. Target **2–4 MB JPEG** client-side. Always returns `generationId` + `shareUrl`. |
+ | GET | `/api/playlist/job/:jobId/stream` | SSE; `?progressToken=` or `X-Progress-Token` or owner JWT |
+ | GET | `/api/playlist/job/:jobId` | Poll fallback; same credentials |
+ | POST | `/api/playlist/save` | Master-account Spotify playlist |
+ | POST | `/api/playlist/suggest-more` | |
+ | POST | `/api/playlist/regenerate` | Premium |
+ | GET | `/api/playlist/history` | |
+-| GET/DELETE | `/api/playlist/generation/:id` | |
++| GET/DELETE | `/api/playlist/generation/:id` | Owner-only reopen / delete |
++| GET | `/api/playlist/generation/:id/links` | **Public** multi-target links (Odesli / Apple / Spotify). Lazy-backfills ISRC + links. |
+ | POST | `/api/playlist/import` | |
+ 
++### Track shape (persisted + returned)
++
++```json
++{
++  "id": "spotifyTrackId",
++  "uri": "spotify:track:…",
++  "name": "Title",
++  "artists": [{ "name": "Artist" }],
++  "album": { "name": "Album", "images": [] },
++  "duration_ms": 180000,
++  "preview_url": null,
++  "isrc": "USUM71234567",
++  "appleCatalogId": "1234567890",
++  "odesliLink": "https://song.link/…"
++}
++```
++
++### Public share page
++
++`GET /p/:id` — server-rendered HTML with Open Graph tags. Same data as `/generation/:id/links`.
++
+ ### Process response (async)
+ 
+ ```json
+@@ -64,6 +91,16 @@ Spotify playlist **export uses the master Spotify account** (unchanged). Clients
+ 
+ Persist `jobId` + `progressToken` on device for resume after backgrounding.
+ 
++Completed job / sync result includes `generationId`, `shareUrl` (`https://momentai.dev/p/<id>`), `tracks`, `metadata`.
++
++## Apple Music
++
++| Method | Path | Notes |
++|--------|------|--------|
++| GET | `/api/apple/dev-token` | Short-lived MusicKit developer JWT (ES256). Requires `APPLE_MUSIC_*` env. |
++
++Music User Token is obtained on-device (iOS MusicKit plugin / Android MusicKit JS). Never send the private key to clients.
++
+ ## Billing
+ 
+ | Client | Mechanism |
+@@ -82,3 +119,7 @@ Native public builds must **not** open Stripe Checkout for Premium.
+ ## Storage
+ 
+ Production should set `STORAGE_PROVIDER=s3` with DigitalOcean Spaces (or compatible) so images survive redeploys. See [spaces-setup.md](./spaces-setup.md).
++
++## Web front-end role
++
++Interactive browser generation UI can be soft-retired via `WEB_INTERACTIVE_UI_ENABLED=false` (landing + store CTAs). Keep `/p/:id`, `/auth/callback`, privacy/terms/support pages live — mobile depends on the API + share pages.
+diff --git a/package-lock.json b/package-lock.json
+index da10d5b..0eb627c 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -19,6 +19,7 @@
+         "express": "^4.19.2",
+         "express-rate-limit": "^7.1.5",
+         "ioredis": "^5.4.1",
++        "jose": "^6.2.3",
+         "multer": "^1.4.5-lts.1",
+         "pg": "^8.11.3",
+         "prisma": "^5.10.0",
+@@ -2425,6 +2426,15 @@
+       "integrity": "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ==",
+       "license": "MIT"
+     },
++    "node_modules/jose": {
++      "version": "6.2.3",
++      "resolved": "https://registry.npmjs.org/jose/-/jose-6.2.3.tgz",
++      "integrity": "sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==",
++      "license": "MIT",
++      "funding": {
++        "url": "https://github.com/sponsors/panva"
++      }
++    },
+     "node_modules/json-bigint": {
+       "version": "1.0.0",
+       "resolved": "https://registry.npmjs.org/json-bigint/-/json-bigint-1.0.0.tgz",
+diff --git a/package.json b/package.json
+index d7bf0b3..52b9c02 100644
+--- a/package.json
++++ b/package.json
+@@ -27,6 +27,7 @@
+     "express": "^4.19.2",
+     "express-rate-limit": "^7.1.5",
+     "ioredis": "^5.4.1",
++    "jose": "^6.2.3",
+     "multer": "^1.4.5-lts.1",
+     "pg": "^8.11.3",
+     "prisma": "^5.10.0",
+diff --git a/src/clients/appleMusicClient.js b/src/clients/appleMusicClient.js
+new file mode 100644
+index 0000000..3f06847
+--- /dev/null
++++ b/src/clients/appleMusicClient.js
+@@ -0,0 +1,103 @@
++/**
++ * Apple Music API helpers — developer token (ES256 JWT) + catalog ISRC lookup.
++ * Private MusicKit key stays server-side only.
++ */
++
++import { SignJWT, importPKCS8 } from 'jose';
++
++const TOKEN_TTL_SECONDS = 12 * 60 * 60; // 12h (Apple allows up to ~6 months)
++let tokenCache = { token: null, expiresAt: 0 };
++let privateKeyPromise = null;
++
++function appleConfigured() {
++  return Boolean(
++    process.env.APPLE_MUSIC_TEAM_ID &&
++      process.env.APPLE_MUSIC_KEY_ID &&
++      process.env.APPLE_MUSIC_PRIVATE_KEY
++  );
++}
++
++export function isAppleMusicConfigured() {
++  return appleConfigured();
++}
++
++function normalizePrivateKey(raw) {
++  if (!raw) return '';
++  // Support env values with literal \n or already-formatted PEM
++  return String(raw).replace(/\\n/g, '\n').trim();
++}
++
++async function getPrivateKey() {
++  if (!privateKeyPromise) {
++    const pem = normalizePrivateKey(process.env.APPLE_MUSIC_PRIVATE_KEY);
++    privateKeyPromise = importPKCS8(pem, 'ES256');
++  }
++  return privateKeyPromise;
++}
++
++/**
++ * Sign a short-lived MusicKit developer token.
++ * @returns {Promise<string|null>}
++ */
++export async function getDeveloperToken() {
++  if (process.env.NODE_ENV === 'test') {
++    return 'test_apple_dev_token';
++  }
++  if (!appleConfigured()) return null;
++
++  const now = Math.floor(Date.now() / 1000);
++  if (tokenCache.token && tokenCache.expiresAt > now + 60) {
++    return tokenCache.token;
++  }
++
++  const teamId = process.env.APPLE_MUSIC_TEAM_ID;
++  const keyId = process.env.APPLE_MUSIC_KEY_ID;
++  const key = await getPrivateKey();
++  const exp = now + TOKEN_TTL_SECONDS;
++
++  const token = await new SignJWT({})
++    .setProtectedHeader({ alg: 'ES256', kid: keyId })
++    .setIssuer(teamId)
++    .setIssuedAt(now)
++    .setExpirationTime(exp)
++    .sign(key);
++
++  tokenCache = { token, expiresAt: exp };
++  return token;
++}
++
++/**
++ * Resolve Apple Music catalog song ID from ISRC.
++ * @param {string} isrc
++ * @param {string} [storefront='us']
++ * @returns {Promise<string|null>}
++ */
++export async function resolveCatalogIdByIsrc(isrc, storefront = 'us') {
++  if (!isrc) return null;
++  if (process.env.NODE_ENV === 'test') {
++    return `apple_mock_${String(isrc).slice(0, 12)}`;
++  }
++
++  const token = await getDeveloperToken();
++  if (!token) return null;
++
++  const url =
++    `https://api.music.apple.com/v1/catalog/${encodeURIComponent(storefront)}` +
++    `/songs?filter[isrc]=${encodeURIComponent(isrc)}`;
++
++  try {
++    const res = await fetch(url, {
++      headers: { Authorization: `Bearer ${token}` }
++    });
++    if (!res.ok) {
++      console.warn(`[AppleMusic] ISRC lookup failed ${res.status} for ${isrc}`);
++      return null;
++    }
++    const data = await res.json();
++    const id = data?.data?.[0]?.id || null;
++    return id;
++  } catch (err) {
++    console.warn(`[AppleMusic] ISRC lookup error for ${isrc}:`, err.message);
++    return null;
++  }
++}
+diff --git a/src/clients/spotifyClient.js b/src/clients/spotifyClient.js
+index 5c19ce0..0de9d16 100644
+--- a/src/clients/spotifyClient.js
++++ b/src/clients/spotifyClient.js
+@@ -1115,9 +1115,10 @@ export async function getPlaylistTracks(token, playlistId) {
+  */
+ export async function searchTrackByDetails(token, title, artist) {
+   if (process.env.NODE_ENV === 'test') {
++    const id = `mock_track_${Buffer.from(title).toString('hex').slice(0, 8)}`;
+     return {
+-      id: `mock_track_${Buffer.from(title).toString('hex').slice(0, 8)}`,
+-      uri: `spotify:track:mock_track_${Buffer.from(title).toString('hex').slice(0, 8)}`,
++      id,
++      uri: `spotify:track:${id}`,
+       name: title,
+       artists: [{ name: artist }],
+       album: {
+@@ -1129,7 +1130,10 @@ export async function searchTrackByDetails(token, title, artist) {
+         ]
+       },
+       duration_ms: 180000,
+-      preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
++      preview_url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
++      external_ids: {
++        isrc: `USMOCK${Buffer.from(title).toString('hex').slice(0, 7).toUpperCase()}`.padEnd(12, '0')
++      }
+     };
+   }
+ 
+@@ -1207,6 +1211,52 @@ export async function searchTrackByDetails(token, title, artist) {
+   }
+ }
+ 
++/**
++ * Batch-fetch Spotify track objects by ID (includes external_ids.isrc).
++ * @param {string} token
++ * @param {string[]} ids
++ * @returns {Promise<object[]>}
++ */
++export async function getTracksByIds(token, ids = []) {
++  const unique = [...new Set((ids || []).filter(Boolean))];
++  if (!unique.length) return [];
++
++  if (process.env.NODE_ENV === 'test') {
++    return unique.map((id) => ({
++      id,
++      uri: `spotify:track:${id}`,
++      name: `Mock ${id}`,
++      artists: [{ name: 'Mock Artist' }],
++      album: { name: 'Mock Album', images: [] },
++      duration_ms: 180000,
++      preview_url: null,
++      external_ids: { isrc: `USMOCK${String(id).replace(/\W/g, '').slice(0, 7).toUpperCase()}`.padEnd(12, '0') }
++    }));
++  }
++
++  const out = [];
++  for (let i = 0; i < unique.length; i += 50) {
++    const chunk = unique.slice(i, i + 50);
++    const url = `https://api.spotify.com/v1/tracks?ids=${encodeURIComponent(chunk.join(','))}`;
++    try {
++      const response = await fetch(url, {
++        headers: { Authorization: `Bearer ${token}` }
++      });
++      if (!response.ok) {
++        console.warn(`[Spotify] getTracksByIds failed: ${response.status}`);
++        continue;
++      }
++      const data = await response.json();
++      for (const track of data.tracks || []) {
++        if (track?.id) out.push(track);
++      }
++    } catch (err) {
++      console.warn('[Spotify] getTracksByIds error:', err.message);
++    }
++  }
++  return out;
++}
++
+ export function getRateLimitResetTime() {
+   if (isRateLimited && Date.now() < rateLimitResetTime) {
+     return rateLimitResetTime;
+diff --git a/src/public/continue-in-app.html b/src/public/continue-in-app.html
+new file mode 100644
+index 0000000..6e3c6f0
+--- /dev/null
++++ b/src/public/continue-in-app.html
+@@ -0,0 +1,41 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>Continue in the MomentAI app</title>
++  <meta name="apple-itunes-app" content="app-id=PLACEHOLDER" />
++  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
++  <style>
++    body {
++      margin: 0; min-height: 100vh; display: grid; place-items: center;
++      font-family: "Space Grotesk", system-ui, sans-serif; color: #ece5da;
++      background: linear-gradient(165deg, #17110c, #2a1f16); padding: 2rem; text-align: center;
++    }
++    .brand { font-family: "Space Mono", monospace; color: #e9a94f; letter-spacing: 0.1em; text-transform: uppercase; }
++    h1 { font-size: 2rem; margin: 12px 0; }
++    p { color: #9a8f80; max-width: 28rem; }
++    a.btn {
++      display: inline-block; margin-top: 20px; padding: 14px 20px; border-radius: 999px;
++      background: #e9a94f; color: #17110c; font-weight: 700; text-decoration: none;
++    }
++    a.secondary { color: #e9a94f; display: inline-block; margin-top: 16px; }
++  </style>
++</head>
++<body>
++  <main>
++    <p class="brand">MomentAI</p>
++    <h1>Continue in the app</h1>
++    <p>Playlist generation now lives in the MomentAI mobile app. Download it to capture a moment and open playlists anywhere.</p>
++    <a class="btn" href="https://apps.apple.com/">Get the app</a>
++    <div><a class="secondary" href="/">Back to momentai.dev</a></div>
++  </main>
++  <script>
++    // Prefer custom scheme when installed
++    try {
++      const deep = 'momentai://' + (location.pathname.replace(/^\//, '') || 'home');
++      setTimeout(() => { window.location.href = deep; }, 400);
++    } catch (_) {}
++  </script>
++</body>
++</html>
+diff --git a/src/public/landing-app.html b/src/public/landing-app.html
+new file mode 100644
+index 0000000..4266113
+--- /dev/null
++++ b/src/public/landing-app.html
+@@ -0,0 +1,56 @@
++<!DOCTYPE html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>MomentAI — Turn moments into music</title>
++  <meta name="description" content="One photo. One playlist. Get MomentAI on iOS and Android." />
++  <meta name="apple-itunes-app" content="app-id=PLACEHOLDER" />
++  <link rel="preconnect" href="https://fonts.googleapis.com" />
++  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
++  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
++  <style>
++    :root { --bg:#17110c; --text:#ece5da; --muted:#9a8f80; --accent:#e9a94f; }
++    * { box-sizing: border-box; }
++    body {
++      margin: 0; min-height: 100vh; color: var(--text);
++      font-family: "Space Grotesk", system-ui, sans-serif;
++      background:
++        radial-gradient(ellipse 90% 55% at 70% 0%, rgba(233,169,79,0.22), transparent 55%),
++        linear-gradient(165deg, #17110c, #2a1f16 70%);
++      display: grid; place-items: center; padding: 2rem;
++    }
++    .card { max-width: 420px; text-align: left; }
++    .brand {
++      font-family: "Space Mono", monospace; letter-spacing: 0.1em;
++      text-transform: uppercase; color: var(--accent); font-size: 0.85rem;
++    }
++    h1 { font-size: clamp(2.4rem, 8vw, 3.4rem); line-height: 1.05; margin: 12px 0; }
++    p { color: var(--muted); line-height: 1.5; }
++    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
++    a.btn {
++      display: inline-block; text-decoration: none; font-weight: 700;
++      padding: 14px 18px; border-radius: 999px; background: var(--accent); color: #17110c;
++    }
++    a.btn.ghost { background: transparent; color: var(--accent); border: 1px solid rgba(233,169,79,0.35); }
++    footer { margin-top: 40px; font-size: 0.85rem; color: var(--muted); }
++    footer a { color: var(--accent); }
++  </style>
++</head>
++<body>
++  <main class="card">
++    <p class="brand">MomentAI</p>
++    <h1>Catch the light.</h1>
++    <p>One photo. One playlist. Yours — open in Spotify, Apple Music, or anywhere.</p>
++    <div class="actions">
++      <a class="btn" href="https://apps.apple.com/">App Store</a>
++      <a class="btn ghost" href="https://play.google.com/store">Google Play</a>
++    </div>
++    <footer>
++      <a href="/privacy.html">Privacy</a> ·
++      <a href="/terms.html">Terms</a> ·
++      <a href="/delete-account.html">Delete account</a>
++    </footer>
++  </main>
++</body>
++</html>
+diff --git a/src/routes/apple.js b/src/routes/apple.js
+new file mode 100644
+index 0000000..81d188e
+--- /dev/null
++++ b/src/routes/apple.js
+@@ -0,0 +1,40 @@
++import express from 'express';
++import * as appleMusic from '../clients/appleMusicClient.js';
++
++const router = express.Router();
++
++/**
++ * GET /api/apple/dev-token
++ * Returns a short-lived MusicKit developer JWT (ES256).
++ * Private key never leaves the server.
++ */
++router.get('/dev-token', async (req, res) => {
++  try {
++    if (!appleMusic.isAppleMusicConfigured() && process.env.NODE_ENV !== 'test') {
++      return res.status(503).json({
++        success: false,
++        message: 'Apple Music is not configured on this server.'
++      });
++    }
++
++    const token = await appleMusic.getDeveloperToken();
++    if (!token) {
++      return res.status(503).json({
++        success: false,
++        message: 'Unable to mint Apple Music developer token.'
++      });
++    }
++
++    res.setHeader('Cache-Control', 'private, max-age=3600');
++    res.json({
++      success: true,
++      token,
++      expiresIn: 12 * 60 * 60
++    });
++  } catch (err) {
++    console.error('[apple/dev-token]', err);
++    res.status(500).json({ success: false, message: 'Failed to mint developer token.' });
++  }
++});
++
++export default router;
+diff --git a/src/routes/mobile.js b/src/routes/mobile.js
+index 327a28c..6324a87 100644
+--- a/src/routes/mobile.js
++++ b/src/routes/mobile.js
+@@ -23,7 +23,16 @@ router.get('/compatibility', (req, res) => {
+     features: {
+       masterSpotifyExport: true,
+       storeBilling: process.env.MOBILE_STORE_BILLING_ENABLED === 'true',
+-      stripeCheckoutInApp: false
++      stripeCheckoutInApp: false,
++      multiTargetLinks: true,
++      appleMusicSave: process.env.APPLE_MUSIC_ENABLED === 'true',
++      appleMusicDevToken:
++        process.env.NODE_ENV === 'test' ||
++        Boolean(
++          process.env.APPLE_MUSIC_TEAM_ID &&
++            process.env.APPLE_MUSIC_KEY_ID &&
++            process.env.APPLE_MUSIC_PRIVATE_KEY
++        )
+     }
+   });
+ });
+diff --git a/src/routes/playlist.js b/src/routes/playlist.js
+index 72eb0e2..09aade7 100644
+--- a/src/routes/playlist.js
++++ b/src/routes/playlist.js
+@@ -14,10 +14,11 @@ import {
+   getRemainingToday,
+   effectiveDailyLimit,
+   trackLimitForTier,
+-  startOfUtcDay
++  startOfUtcDay,
++  trackExclusions,
++  publicPlaylistUrl
+ } from '../utils/moments.js';
+ import { createThumbnailDataUrl } from '../utils/thumbnail.js';
+-import { trackExclusions } from '../utils/moments.js';
+ import {
+   issueProgressToken,
+   verifyProgressToken,
+@@ -25,6 +26,10 @@ import {
+ } from '../utils/progressToken.js';
+ import { createUserRateLimiter } from '../utils/userRateLimit.js';
+ import { isAllowedImageMime, normalizeUploadImage } from '../utils/imageConvert.js';
++import {
++  ensureGenerationTrackLinks,
++  toPublicTrackLinks
++} from '../services/trackLinkService.js';
+ import { fileURLToPath } from 'url';
+ 
+ const __filename = fileURLToPath(import.meta.url);
+@@ -155,6 +160,7 @@ function generationToProcessResult(row) {
+   return {
+     success: true,
+     generationId: row.id,
++    shareUrl: publicPlaylistUrl(row.id),
+     imagePath: displayImage,
+     imageThumb: row.image_thumb || null,
+     metadata: {
+@@ -691,6 +697,39 @@ router.get('/generation/:id', async (req, res) => {
+   }
+ });
+ 
++/**
++ * Route: GET /api/playlist/generation/:id/links
++ * Public multi-target track links (Odesli + Apple + Spotify). Lazy-backfills ISRC/links.
++ */
++router.get('/generation/:id/links', async (req, res) => {
++  try {
++    const enriched = await ensureGenerationTrackLinks(db, req.params.id);
++    if (!enriched) {
++      return res.status(404).json({ success: false, message: 'Playlist not found.' });
++    }
++
++    const tracks = toPublicTrackLinks(enriched.tracks || []);
++    const matchedApple = tracks.filter((t) => t.appleCatalogId).length;
++
++    res.setHeader('Cache-Control', 'public, max-age=300');
++    res.json({
++      success: true,
++      generationId: enriched.id,
++      shareUrl: publicPlaylistUrl(enriched.id),
++      title: enriched.emotional_vibe || enriched.playlist_name || 'MomentAI playlist',
++      description: enriched.environmental_context || null,
++      imagePath: enriched.image_thumb || enriched.image_path || null,
++      playlistUrl: enriched.playlist_url || null,
++      trackCount: tracks.length,
++      matchedAppleCount: matchedApple,
++      tracks
++    });
++  } catch (error) {
++    console.error('Failed to fetch playlist links:', error);
++    res.status(500).json({ success: false, message: error.message });
++  }
++});
++
+ /**
+  * Route: DELETE /api/playlist/generation/:id
+  * Remove a saved moment from the user's history.
+diff --git a/src/server.js b/src/server.js
+index eb5101d..212f973 100644
+--- a/src/server.js
++++ b/src/server.js
+@@ -14,6 +14,12 @@ import healthRouter from './routes/health.js';
+ import adminRouter from './routes/admin.js';
+ import mobileRouter from './routes/mobile.js';
+ import billingRouter from './routes/billing.js';
++import appleRouter from './routes/apple.js';
++import {
++  ensureGenerationTrackLinks,
++  toPublicTrackLinks
++} from './services/trackLinkService.js';
++import { renderPublicPlaylistHtml } from './services/publicPlaylistPage.js';
+ 
+ // Setup __dirname for ES Modules
+ const __filename = fileURLToPath(import.meta.url);
+@@ -142,9 +148,55 @@ app.use('/api/billing', apiLimiter, billingRouter); // Store entitlement webhook
+ app.use('/api/playlist', apiLimiter, playlistRouter); // IP limiter fallback; per-user limits inside router
+ app.use('/api/payment', apiLimiter, paymentRouter);   // Apply rate limiter to payments (web Stripe)
+ app.use('/api/admin', apiLimiter, adminRouter);
++app.use('/api/apple', apiLimiter, appleRouter);
++
++/**
++ * Public share page — SSR with Open Graph tags (primary multi-target / viral surface).
++ * Must be registered before the SPA catch-all.
++ */
++app.get('/p/:id', async (req, res) => {
++  const appBase = (process.env.APP_BASE_URL || 'https://momentai.dev').replace(/\/$/, '');
++  try {
++    const enriched = await ensureGenerationTrackLinks(db, req.params.id);
++    if (!enriched) {
++      return res.status(404).send(`<!DOCTYPE html><html><head><title>Not found · MomentAI</title></head>
++<body style="font-family:system-ui;background:#17110c;color:#ece5da;padding:2rem">
++<a href="${appBase}" style="color:#e9a94f">MomentAI</a>
++<h1>Playlist not found</h1>
++<p>This share link may have expired or never existed.</p>
++</body></html>`);
++    }
++    const tracks = toPublicTrackLinks(enriched.tracks || []);
++    const html = renderPublicPlaylistHtml({ row: enriched, tracks, appBase });
++    res.setHeader('Cache-Control', 'public, max-age=300');
++    res.type('html').send(html);
++  } catch (err) {
++    console.error('[/p/:id]', err);
++    res.status(500).send('Failed to render playlist');
++  }
++});
++
++/**
++ * Soft retirement of interactive web UI (flag-off → observe → remove).
++ * When WEB_INTERACTIVE_UI_ENABLED=false, `/` serves a store-CTA landing.
++ * Legal pages, auth callback, and /p/:id stay live regardless.
++ */
++const interactiveWebUi =
++  process.env.WEB_INTERACTIVE_UI_ENABLED !== 'false' &&
++  process.env.WEB_INTERACTIVE_UI_ENABLED !== '0';
++
++app.get('/', (req, res, next) => {
++  if (interactiveWebUi) return next();
++  return res.sendFile(path.join(publicDir, 'landing-app.html'));
++});
+ 
+ // Fallback: Send public/index.html for any frontend SPA navigation
+ app.get('*', (req, res) => {
++  // Keep legal / auth / delete pages as static files (already served above when present)
++  if (!interactiveWebUi && !req.path.match(/\.(html|js|css|png|jpg|svg|ico|json|txt|map)$/i)) {
++    // Continue-in-app interstitial for old interactive deep paths
++    return res.sendFile(path.join(publicDir, 'continue-in-app.html'));
++  }
+   res.sendFile(path.resolve(__dirname, 'public/index.html'));
+ });
+ 
+diff --git a/src/services/publicPlaylistPage.js b/src/services/publicPlaylistPage.js
+new file mode 100644
+index 0000000..14f14a8
+--- /dev/null
++++ b/src/services/publicPlaylistPage.js
+@@ -0,0 +1,170 @@
++/**
++ * Server-rendered public playlist page (/p/:id) with Open Graph tags.
++ * Primary shareable / viral surface for multi-target output (Odesli option B).
++ */
++
++import { publicPlaylistUrl } from '../utils/moments.js';
++
++function escapeHtml(s) {
++  return String(s ?? '')
++    .replace(/&/g, '&amp;')
++    .replace(/</g, '&lt;')
++    .replace(/>/g, '&gt;')
++    .replace(/"/g, '&quot;');
++}
++
++function serviceIcons(track) {
++  const parts = [];
++  if (track.spotifyUrl) {
++    parts.push(
++      `<a class="svc" href="${escapeHtml(track.spotifyUrl)}" rel="noopener noreferrer" target="_blank">Spotify</a>`
++    );
++  }
++  if (track.appleUrl) {
++    parts.push(
++      `<a class="svc" href="${escapeHtml(track.appleUrl)}" rel="noopener noreferrer" target="_blank">Apple Music</a>`
++    );
++  }
++  if (track.odesliLink) {
++    parts.push(
++      `<a class="svc svc-primary" href="${escapeHtml(track.odesliLink)}" rel="noopener noreferrer" target="_blank">Open anywhere</a>`
++    );
++  }
++  return parts.join(' · ') || '<span class="muted">Link pending</span>';
++}
++
++/**
++ * @param {object} opts
++ * @param {object} opts.row - generation row
++ * @param {object[]} opts.tracks - public track link objects
++ * @param {string} opts.appBase
++ */
++export function renderPublicPlaylistHtml({ row, tracks, appBase }) {
++  const title = row.emotional_vibe || row.playlist_name || 'MomentAI playlist';
++  const description =
++    row.environmental_context ||
++    `${tracks.length} tracks curated from a moment — open in your streaming app.`;
++  const shareUrl = publicPlaylistUrl(row.id, appBase);
++  const image =
++    (row.image_thumb && String(row.image_thumb).startsWith('http')
++      ? row.image_thumb
++      : null) ||
++    (row.image_path && String(row.image_path).startsWith('http') ? row.image_path : null) ||
++    `${appBase}/og-default.png`;
++
++  const trackRows = tracks
++    .map((t, i) => {
++      const artist = t.artists?.[0]?.name || '';
++      return `<li class="track">
++        <span class="n">${i + 1}</span>
++        <div class="meta">
++          <strong>${escapeHtml(t.name || 'Track')}</strong>
++          <span class="artist">${escapeHtml(artist)}</span>
++          <div class="links">${serviceIcons(t)}</div>
++        </div>
++      </li>`;
++    })
++    .join('\n');
++
++  return `<!DOCTYPE html>
++<html lang="en">
++<head>
++  <meta charset="UTF-8" />
++  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++  <title>${escapeHtml(title)} · MomentAI</title>
++  <meta name="description" content="${escapeHtml(description)}" />
++  <meta property="og:type" content="music.playlist" />
++  <meta property="og:site_name" content="MomentAI" />
++  <meta property="og:title" content="${escapeHtml(title)}" />
++  <meta property="og:description" content="${escapeHtml(description)}" />
++  <meta property="og:url" content="${escapeHtml(shareUrl)}" />
++  <meta property="og:image" content="${escapeHtml(image)}" />
++  <meta name="twitter:card" content="summary_large_image" />
++  <meta name="twitter:title" content="${escapeHtml(title)}" />
++  <meta name="twitter:description" content="${escapeHtml(description)}" />
++  <meta name="twitter:image" content="${escapeHtml(image)}" />
++  <meta name="apple-itunes-app" content="app-id=PLACEHOLDER, app-argument=${escapeHtml(shareUrl)}" />
++  <link rel="preconnect" href="https://fonts.googleapis.com" />
++  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
++  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
++  <style>
++    :root {
++      --bg: #17110c;
++      --bg2: #2a1f16;
++      --text: #ece5da;
++      --muted: #9a8f80;
++      --accent: #e9a94f;
++      --line: rgba(233,169,79,0.22);
++    }
++    * { box-sizing: border-box; }
++    body {
++      margin: 0;
++      min-height: 100vh;
++      font-family: "Space Grotesk", system-ui, sans-serif;
++      color: var(--text);
++      background:
++        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(233,169,79,0.18), transparent),
++        linear-gradient(180deg, var(--bg), var(--bg2));
++    }
++    .wrap { max-width: 640px; margin: 0 auto; padding: 28px 20px 64px; }
++    .brand {
++      display: inline-flex; align-items: center; gap: 10px;
++      color: var(--accent); text-decoration: none;
++      font-family: "Space Mono", monospace; font-size: 0.85rem; letter-spacing: 0.08em;
++      text-transform: uppercase;
++    }
++    .brand-mark {
++      width: 10px; height: 10px; border-radius: 50%;
++      background: var(--accent); box-shadow: 0 0 16px rgba(233,169,79,0.55);
++    }
++    h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.15; margin: 18px 0 8px; }
++    .sub { color: var(--muted); margin: 0 0 28px; }
++    .cta {
++      display: inline-block; margin-bottom: 28px;
++      background: var(--accent); color: #17110c; font-weight: 700;
++      text-decoration: none; padding: 12px 18px; border-radius: 999px;
++    }
++    .cta.ghost {
++      background: transparent; color: var(--accent);
++      border: 1px solid var(--line); margin-left: 8px;
++    }
++    ol { list-style: none; padding: 0; margin: 0; }
++    .track {
++      display: grid; grid-template-columns: 2rem 1fr; gap: 12px;
++      padding: 14px 0; border-top: 1px solid var(--line);
++    }
++    .n { font-family: "Space Mono", monospace; color: var(--muted); padding-top: 2px; }
++    .meta strong { display: block; font-size: 1.05rem; }
++    .artist { color: var(--muted); font-size: 0.92rem; }
++    .links { margin-top: 6px; font-size: 0.85rem; }
++    .svc { color: var(--muted); text-decoration: none; }
++    .svc:hover { color: var(--text); }
++    .svc-primary { color: var(--accent); }
++    .muted { color: var(--muted); }
++    footer { margin-top: 40px; color: var(--muted); font-size: 0.85rem; }
++    footer a { color: var(--accent); }
++  </style>
++</head>
++<body>
++  <div class="wrap">
++    <a class="brand" href="${escapeHtml(appBase)}"><span class="brand-mark"></span> MomentAI</a>
++    <h1>${escapeHtml(title)}</h1>
++    <p class="sub">${escapeHtml(description)}</p>
++    <div>
++      <a class="cta" href="https://apps.apple.com/">Get the app</a>
++      <a class="cta ghost" href="${escapeHtml(appBase)}">momentai.dev</a>
++    </div>
++    <ol>
++      ${trackRows || '<li class="muted">No tracks yet.</li>'}
++    </ol>
++    <footer>
++      Made with MomentAI ·
++      <a href="${escapeHtml(appBase)}/privacy.html">Privacy</a> ·
++      <a href="${escapeHtml(appBase)}/terms.html">Terms</a>
++    </footer>
++  </div>
++</body>
++</html>`;
++}
++
++export { toPublicTrackLinks } from './trackLinkService.js';
+diff --git a/src/services/trackLinkService.js b/src/services/trackLinkService.js
+new file mode 100644
+index 0000000..92e10d5
+--- /dev/null
++++ b/src/services/trackLinkService.js
+@@ -0,0 +1,212 @@
++/**
++ * Cross-platform track link enrichment (ISRC → Odesli + Apple catalog).
++ * Resolve at generation time when possible; lazily backfill on /links and /p/:id.
++ */
++
++import * as spotify from '../clients/spotifyClient.js';
++import * as appleMusic from '../clients/appleMusicClient.js';
++import { slimTrack } from '../utils/moments.js';
++
++const ODESLI_BASE = (process.env.ODESLI_API_BASE || 'https://api.song.link/v1-alpha.1').replace(
++  /\/$/,
++  ''
++);
++const ODESLI_CACHE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (responses are stable)
++
++/** In-memory Odesli cache keyed by ISRC or Spotify id */
++const odesliCache = new Map();
++
++function cacheGet(key) {
++  const hit = odesliCache.get(key);
++  if (!hit) return undefined;
++  if (Date.now() > hit.expiresAt) {
++    odesliCache.delete(key);
++    return undefined;
++  }
++  return hit.value;
++}
++
++function cacheSet(key, value) {
++  odesliCache.set(key, { value, expiresAt: Date.now() + ODESLI_CACHE_MS });
++}
++
++/**
++ * Ensure Spotify tracks have external_ids.isrc (batch GET /v1/tracks).
++ * Mutates track objects in place; returns same array.
++ */
++export async function ensureIsrcs(tracks, spotifyToken) {
++  const list = Array.isArray(tracks) ? tracks : [];
++  const missing = list.filter((t) => t?.id && !(t.external_ids?.isrc || t.isrc));
++  if (!missing.length) return list;
++
++  const ids = missing.map((t) => t.id);
++  const detailed = await spotify.getTracksByIds(spotifyToken, ids);
++  const byId = new Map(detailed.map((t) => [t.id, t]));
++
++  for (const track of list) {
++    if (!track?.id) continue;
++    if (track.external_ids?.isrc || track.isrc) continue;
++    const full = byId.get(track.id);
++    if (full?.external_ids?.isrc) {
++      track.external_ids = { ...(track.external_ids || {}), isrc: full.external_ids.isrc };
++      track.isrc = full.external_ids.isrc;
++    }
++  }
++  return list;
++}
++
++/**
++ * Fetch Odesli / song.link universal URL for a track.
++ * Prefer ISRC; fall back to Spotify URL.
++ */
++export async function fetchOdesliLink(track) {
++  const isrc = track?.isrc || track?.external_ids?.isrc || null;
++  const spotifyId = track?.id || null;
++  const cacheKey = isrc ? `isrc:${isrc}` : spotifyId ? `spotify:${spotifyId}` : null;
++  if (!cacheKey) return null;
++
++  const cached = cacheGet(cacheKey);
++  if (cached !== undefined) return cached;
++
++  if (process.env.NODE_ENV === 'test') {
++    const link = isrc
++      ? `https://song.link/i/${encodeURIComponent(isrc)}`
++      : `https://song.link/s/${spotifyId}`;
++    cacheSet(cacheKey, link);
++    return link;
++  }
++
++  const params = new URLSearchParams({ userCountry: 'US' });
++  if (isrc) {
++    params.set('type', 'song');
++    params.set('id', isrc);
++    // Odesli accepts platform+type+id; for ISRC use song.link entity id form:
++    // https://api.song.link/v1-alpha.1/links?url=... is most reliable
++    params.delete('type');
++    params.delete('id');
++    params.set('url', `https://song.link/i/${encodeURIComponent(isrc)}`);
++  } else if (spotifyId) {
++    params.set('url', `https://open.spotify.com/track/${spotifyId}`);
++  }
++
++  try {
++    const res = await fetch(`${ODESLI_BASE}/links?${params.toString()}`, {
++      headers: { Accept: 'application/json' }
++    });
++    if (!res.ok) {
++      console.warn(`[Odesli] ${res.status} for ${cacheKey}`);
++      cacheSet(cacheKey, null);
++      return null;
++    }
++    const data = await res.json();
++    const link = data?.pageUrl || data?.linksByPlatform?.spotify?.url || null;
++    cacheSet(cacheKey, link);
++    return link;
++  } catch (err) {
++    console.warn(`[Odesli] error for ${cacheKey}:`, err.message);
++    return null;
++  }
++}
++
++/**
++ * Enrich slim tracks with odesliLink + appleCatalogId (best-effort, throttled).
++ * @param {object[]} slimTracks
++ * @param {{ resolveApple?: boolean }} [opts]
++ */
++export async function enrichTrackLinks(slimTracks, opts = {}) {
++  const resolveApple = opts.resolveApple !== false && appleMusic.isAppleMusicConfigured();
++  const out = [];
++
++  for (const track of slimTracks || []) {
++    if (!track) continue;
++    const next = { ...track };
++
++    if (!next.isrc && track.external_ids?.isrc) {
++      next.isrc = track.external_ids.isrc;
++    }
++
++    if (!next.odesliLink) {
++      next.odesliLink = await fetchOdesliLink(next);
++    }
++
++    if (resolveApple && next.isrc && !next.appleCatalogId) {
++      next.appleCatalogId = await appleMusic.resolveCatalogIdByIsrc(next.isrc);
++    }
++
++    out.push(next);
++  }
++
++  return out;
++}
++
++/**
++ * Load generation, backfill missing link fields, persist if changed.
++ * @returns {Promise<object|null>} updated generation row or null
++ */
++export async function ensureGenerationTrackLinks(db, generationId) {
++  const row = await db.generation.findUnique({ where: { id: generationId } });
++  if (!row) return null;
++
++  let tracks = Array.isArray(row.tracks) ? row.tracks.map((t) => ({ ...t })) : [];
++  const needsIsrc = tracks.some((t) => t?.id && !t.isrc);
++  const needsOdesli = tracks.some((t) => t?.id && !t.odesliLink);
++  const needsApple =
++    appleMusic.isAppleMusicConfigured() && tracks.some((t) => t?.isrc && !t.appleCatalogId);
++
++  if (!needsIsrc && !needsOdesli && !needsApple) {
++    return row;
++  }
++
++  if (needsIsrc) {
++    try {
++      const token = await spotify.getClientCredentialsToken();
++      // Rehydrate as Spotify-shaped objects for getTracksByIds merge
++      const hydrated = tracks.map((t) => ({
++        ...t,
++        external_ids: t.isrc ? { isrc: t.isrc } : undefined
++      }));
++      await ensureIsrcs(hydrated, token);
++      tracks = hydrated.map((t) =>
++        slimTrack({
++          ...t,
++          isrc: t.isrc || t.external_ids?.isrc || null,
++          appleCatalogId: t.appleCatalogId,
++          odesliLink: t.odesliLink
++        })
++      );
++    } catch (err) {
++      console.warn('[trackLinkService] ISRC backfill failed:', err.message);
++    }
++  }
++
++  if (needsOdesli || needsApple) {
++    tracks = await enrichTrackLinks(tracks, { resolveApple: needsApple });
++  }
++
++  await db.generation.update({
++    where: { id: generationId },
++    data: { tracks }
++  });
++
++  return { ...row, tracks };
++}
++
++/**
++ * Map tracks to the public links API shape.
++ */
++export function toPublicTrackLinks(tracks) {
++  return (tracks || []).map((t) => {
++    const isrc = t.isrc || null;
++    const appleCatalogId = t.appleCatalogId || null;
++    return {
++      id: t.id,
++      name: t.name,
++      artists: t.artists || [],
++      isrc,
++      appleCatalogId,
++      spotifyUrl: t.id ? `https://open.spotify.com/track/${t.id}` : null,
++      appleUrl: appleCatalogId ? `https://music.apple.com/song/${appleCatalogId}` : null,
++      odesliLink: t.odesliLink || null
++    };
++  });
++}
+diff --git a/src/utils/moments.js b/src/utils/moments.js
+index 1c0993d..a8e7fae 100644
+--- a/src/utils/moments.js
++++ b/src/utils/moments.js
+@@ -48,7 +48,10 @@ export function trackLimitForTier(tier) {
+   return tier === 'premium' ? PREMIUM_TRACK_LIMIT : FREE_TRACK_LIMIT;
+ }
+ 
+-/** Slim Spotify track objects for JSON persistence. */
++/**
++ * Slim track objects for JSON persistence.
++ * Platform-agnostic fields (isrc, appleCatalogId, odesliLink) enable multi-target output.
++ */
+ export function slimTrack(track) {
+   if (!track?.id) return null;
+   return {
+@@ -61,7 +64,10 @@ export function slimTrack(track) {
+       images: track.album?.images || []
+     },
+     duration_ms: track.duration_ms,
+-    preview_url: track.preview_url ?? null
++    preview_url: track.preview_url ?? null,
++    isrc: track.external_ids?.isrc || track.isrc || null,
++    appleCatalogId: track.appleCatalogId ?? null,
++    odesliLink: track.odesliLink ?? null
+   };
+ }
+ 
+@@ -87,3 +93,10 @@ export function trackExclusions(tracks, limit = 50) {
+   }
+   return exclusions;
+ }
++
++/** Public share URL for a generation (Odesli universal-link surface). */
++export function publicPlaylistUrl(generationId, baseUrl = process.env.APP_BASE_URL) {
++  if (!generationId) return null;
++  const base = (baseUrl || 'https://momentai.dev').replace(/\/$/, '');
++  return `${base}/p/${generationId}`;
++}
+diff --git a/src/workers/playlistWorker.js b/src/workers/playlistWorker.js
+index 23de435..263b915 100644
+--- a/src/workers/playlistWorker.js
++++ b/src/workers/playlistWorker.js
+@@ -4,8 +4,9 @@ import db from '../config/db.js';
+ import { parsePlaylistImage } from '../services/geminiService.js';
+ import * as spotify from '../clients/spotifyClient.js';
+ import crypto from 'crypto';
+-import { slimTracks, FREE_TRACK_LIMIT } from '../utils/moments.js';
++import { slimTracks, FREE_TRACK_LIMIT, publicPlaylistUrl } from '../utils/moments.js';
+ import { loadImageBytes } from '../utils/image.js';
++import { ensureIsrcs, enrichTrackLinks } from '../services/trackLinkService.js';
+ 
+ // Helper to filter unique tracks
+ function filterUniqueTracks(tracks, excludeTracks = []) {
+@@ -160,33 +161,42 @@ export async function processPlaylistJob(jobData, updateProgressFn = async () =>
+     ? await fetchSupplementaryTracks(spotifyToken, metadata, customPrompt, cappedTracks)
+     : [];
+ 
+-  const slimmedTracks = slimTracks(cappedTracks);
+-  const slimmedSuggested = slimTracks(suggestedTracks);
+-
+-  // Save generation (logged-in users only) — after tracks are resolved
+-  if (userId) {
+-    await db.generation.create({
+-      data: {
+-        id: generationId,
+-        user_id: userId,
+-        image_path: webImagePath,
+-        image_thumb: imageThumb || null,
+-        dominant_colors: JSON.stringify(metadata.dominantColorPalette),
+-        environmental_context: metadata.environmentalContext,
+-        emotional_vibe: metadata.emotionalVibe,
+-        seed_genres: JSON.stringify(metadata.seedGenres),
+-        valence: metadata.valence,
+-        energy: metadata.energy,
+-        acousticness: metadata.acousticness,
+-        tracks: slimmedTracks,
+-        suggested_tracks: slimmedSuggested
+-      }
+-    });
++  // Backfill ISRCs (and Odesli/Apple when configured) once at generation time.
++  await ensureIsrcs(cappedTracks, spotifyToken);
++  await ensureIsrcs(suggestedTracks, spotifyToken);
++
++  let slimmedTracks = slimTracks(cappedTracks);
++  let slimmedSuggested = slimTracks(suggestedTracks);
++  try {
++    slimmedTracks = await enrichTrackLinks(slimmedTracks);
++    slimmedSuggested = await enrichTrackLinks(slimmedSuggested, { resolveApple: false });
++  } catch (linkErr) {
++    console.warn('[Worker] Track link enrichment failed (non-fatal):', linkErr.message);
+   }
+ 
++  // Always persist so /p/:id share pages work (user_id may be null for anonymous).
++  await db.generation.create({
++    data: {
++      id: generationId,
++      user_id: userId || null,
++      image_path: webImagePath,
++      image_thumb: imageThumb || null,
++      dominant_colors: JSON.stringify(metadata.dominantColorPalette),
++      environmental_context: metadata.environmentalContext,
++      emotional_vibe: metadata.emotionalVibe,
++      seed_genres: JSON.stringify(metadata.seedGenres),
++      valence: metadata.valence,
++      energy: metadata.energy,
++      acousticness: metadata.acousticness,
++      tracks: slimmedTracks,
++      suggested_tracks: slimmedSuggested
++    }
++  });
++
+   return {
+     success: true,
+-    generationId: userId ? generationId : null,
++    generationId,
++    shareUrl: publicPlaylistUrl(generationId),
+     imagePath: imageThumb || webImagePath,
+     imageThumb: imageThumb || null,
+     metadata,
+diff --git a/tests/mobile_api.spec.js b/tests/mobile_api.spec.js
+index 567bda3..b9daad3 100644
+--- a/tests/mobile_api.spec.js
++++ b/tests/mobile_api.spec.js
+@@ -17,6 +17,44 @@ test.describe('Mobile API readiness (Phase 0)', () => {
+     expect(typeof body.forceUpgrade).toBe('boolean');
+     expect(body.features.masterSpotifyExport).toBe(true);
+     expect(body.features.stripeCheckoutInApp).toBe(false);
++    expect(body.features.multiTargetLinks).toBe(true);
++    expect(typeof body.features.appleMusicSave).toBe('boolean');
++    expect(typeof body.features.appleMusicDevToken).toBe('boolean');
++  });
++
++  test('public playlist links endpoint shape for missing id', async ({ request }) => {
++    const res = await request.get('/api/playlist/generation/does-not-exist-uuid/links');
++    expect(res.status()).toBe(404);
++    const body = await res.json();
++    expect(body.success).toBe(false);
++  });
++
++  test('apple dev-token endpoint responds in test', async ({ request }) => {
++    const res = await request.get('/api/apple/dev-token');
++    expect(res.ok()).toBeTruthy();
++    const body = await res.json();
++    expect(body.success).toBe(true);
++    expect(body.token).toBeTruthy();
++  });
++
++  test('slimTrack preserves isrc fields', async () => {
++    const { slimTrack, publicPlaylistUrl } = await import('../src/utils/moments.js');
++    const slim = slimTrack({
++      id: 'abc',
++      uri: 'spotify:track:abc',
++      name: 'Song',
++      artists: [{ name: 'Artist' }],
++      album: { name: 'Alb', images: [] },
++      duration_ms: 1,
++      preview_url: null,
++      external_ids: { isrc: 'USTEST123456' },
++      appleCatalogId: '99',
++      odesliLink: 'https://song.link/x'
++    });
++    expect(slim.isrc).toBe('USTEST123456');
++    expect(slim.appleCatalogId).toBe('99');
++    expect(slim.odesliLink).toBe('https://song.link/x');
++    expect(publicPlaylistUrl('gen-1', 'https://momentai.dev')).toBe('https://momentai.dev/p/gen-1');
+   });
+ 
+   test('progress tokens bind to jobId and expire check', async () => {
+-- 
+2.43.0
+
